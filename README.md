@@ -30,8 +30,13 @@
 - [ADR-003: ML baseline](docs/adr/ADR-003-ml-baseline.md)
 - [ADR-004: temporal validation](docs/adr/ADR-004-temporal-validation.md)
 - [ADR-005: prediction snapshots](docs/adr/ADR-005-prediction-snapshots.md)
+- [ADR-006: цель прогноза и фаза расчёта](docs/adr/ADR-006-target-and-phase.md)
 
 Все ADR — Proposed. Владелец ещё не одобрял ни target первой карты, ни stack, ни gates. Внутренние task IDs ссылаются на BACKLOG.md; пути FILES EXPECTED TO CHANGE — будущие файлы, не утверждение, что код уже создан.
+
+**Открытое расхождение:** утверждённый `docs/PRD.md` задаёт цель «карта N после полного драфта»,
+а `PRODUCT.md`, `BACKLOG.md §1 п.6` и `FIRST_10_TASKS.md` — «первая карта до драфта». Выбор
+выносится на вердикт владельца в [ADR-006](docs/adr/ADR-006-target-and-phase.md).
 
 ## Главные выводы
 
