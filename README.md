@@ -78,3 +78,17 @@ curl -s http://127.0.0.1:8000/health   # {"status":"ok","database":"up",...}
 docker compose down        # -v удалить том с данными
 ```
 
+## Схема БД (DB-001)
+
+Temporal-схема ядра создаётся миграцией `0001` (Alembic). Описание — [`docs/SCHEMA.md`](docs/SCHEMA.md),
+семантика времён — [`docs/PRD_TEMPORAL.md`](docs/PRD_TEMPORAL.md) (`PRD-003`).
+
+```bash
+export DATABASE_URL=postgresql+psycopg://d2intel:d2intel_dev@localhost:5432/d2intel
+alembic upgrade head     # применить
+alembic downgrade base   # откатить (обратимо)
+```
+
+Миграционные тесты destructive (`downgrade base`), поэтому работают с отдельной БД
+`d2intel_test`, задаваемой через `D2INTEL_TEST_DATABASE_URL`.
+

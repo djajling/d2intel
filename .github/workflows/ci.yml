@@ -29,6 +29,8 @@ jobs:
           --health-retries 10
     env:
       DATABASE_URL: postgresql+psycopg://d2intel:d2intel_dev@localhost:5432/d2intel
+      # DB-001: миграционные тесты разрушительны (downgrade base) — отдельная БД.
+      D2INTEL_TEST_DATABASE_URL: postgresql+psycopg://d2intel:d2intel_dev@localhost:5432/d2intel_test
       APP_NAME: d2intel
 
     steps:
@@ -58,6 +60,14 @@ jobs:
             sleep 1
           done
           echo "Postgres not ready"; exit 1
+
+      - name: Create test database (DB-001)
+        run: |
+          export PGPASSWORD=d2intel_dev
+          if ! psql -h localhost -p 5432 -U d2intel -d d2intel -tAc \
+               "SELECT 1 FROM pg_database WHERE datname='d2intel_test'" | grep -q 1; then
+            psql -h localhost -p 5432 -U d2intel -d d2intel -c "CREATE DATABASE d2intel_test;"
+          fi
 
       - name: Ruff (lint)
         run: ruff check src tests scripts

@@ -15,15 +15,15 @@ from sqlalchemy import engine_from_config, pool
 
 from d2intel.config import get_settings
 
-# alembic.ini лежит в корне репозитория рядом с этим env.py? Нет —
-# config.config_args подаёт alembic.ini. fileConfig здесь обязателен для логов.
 config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Подменяем url в config на значение из настроек приложения (окружение).
-settings = get_settings()
-config.set_main_option("sqlalchemy.url", settings.database_url)
+# URL берётся из настроек приложения (DATABASE_URL), чтобы не хранить его в
+# alembic.ini. Но если URL уже задан вызывающей стороной (например тестами
+# DB-001, которые мигрируют отдельную тестовую БД), он не переопределяется.
+if not config.get_main_option("sqlalchemy.url"):
+    config.set_main_option("sqlalchemy.url", get_settings().database_url)
 
 # Нет ORM-моделей — target_metadata = None. Autogenerate не используется.
 target_metadata = None
