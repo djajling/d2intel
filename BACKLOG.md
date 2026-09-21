@@ -243,7 +243,7 @@
 - **EPIC:** 01 — Repository and infrastructure
 - **STAGE:** MVP-FIRST10
 - **PRIORITY:** P0
-- **STATUS:** Planned
+- **STATUS:** **Done** (2026-09-21; ветка `task/INF-001`, мерж в `main`; ревью — PASS)
 - **GOAL:** Создать структуру репозитория и минимальный воспроизводимый smoke test. **В текущей сессии не выполняется** — только планирование и спецификация структуры.
 - **CONTEXT:** Нужен предсказуемый каркас modular monolith под FastAPI/pandas/sklearn/Postgres JSONB/Docker local, без запрещённых компонентов.
 - **INPUT:** `PRD-001`, `SRC-001`; §1.
@@ -254,6 +254,9 @@
 - **FILES EXPECTED TO CHANGE:** `README.md`, `pyproject.toml`/`requirements`, `docs/REPO_LAYOUT.md`, `.gitignore`.
 - **RISKS:** Разрастание скелета в преждевременный «фреймворк»; скрытые внешние зависимости.
 - **DEFINITION OF DONE (task-specific):** Существует документ структуры и определённый smoke test; явный список зависимостей без запрещённых; инструкция воспроизведения проверена на бумаге (пошагово исполнима). Никакого запуска в этой сессии.
+- **РЕЗУЛЬТАТ (2026-09-21):** скелет реализован и принят. Созданы `src/d2intel/` (`config.py`, `db.py`, `app.py`, `api/health.py`), `tests/test_smoke.py`, `docker-compose.yml` (PostgreSQL 17.4, порт только `127.0.0.1`), `pyproject.toml` + `requirements*.txt` (pinned), инфраструктура Alembic **без миграций схемы**, `.github/workflows/ci.yml` (ruff + mypy + pytest), `scripts/db_healthcheck.py`. Smoke test: **10 passed** на чистом venv; `ruff`/`mypy` чисто. AC #1 закрыт документом `docs/REPO_LAYOUT.md` (пустые Future-каталоги не созданы — см. правило там же). Отклонение от `ARCHITECTURE.md` §7: принят src-layout с корневым пакетом `src/d2intel/`, зафиксировано в `docs/REPO_LAYOUT.md` §3.
+- **НЕ СДЕЛАНО (осознанно):** миграции схемы (`DB-001`), доменная логика (`ING-001`/`DATA-001`/`FEAT-001`/`ML-001`), `.gitignore` не изменялся (уже покрывает `.env`, `.venv`, `data/`, `artifacts/`).
+- **ДОЛГ:** мёртвый `is_test_env` в `config.py`; `dependencies = []` в `pyproject.toml` (пины только в `requirements.txt`); `filterwarnings` ослаблен до `default` из-за DeprecationWarning от anyio/starlette (закрыть в `INF-002`); черновой комментарий в `alembic/env.py`.
 
 ### INF-002 — Пакетирование, пиннинг окружения, конфиг и секреты
 - **EPIC:** 01 — Repository and infrastructure
