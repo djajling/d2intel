@@ -1,0 +1,32 @@
+# INF-001 — локальный PostgreSQL для разработки.
+# Логически изолирует слой БД; deployment простой (один сервис).
+# Это НЕ оркестрация: нет Redis/Celery/K8s (ARCHITECTURE.md §2). Сервис
+# приложения намеренно не добавляется — это задача INF-004.
+#
+# Поднять:   docker compose up -d
+# Здоровье:  docker compose ps   (ждать состояние healthy)
+# Остановить: docker compose down
+# Сброс:     docker compose down -v   (удаляет том с данными)
+
+services:
+  db:
+    image: postgres:17.4
+    container_name: d2intel-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: d2intel
+      POSTGRES_PASSWORD: d2intel_dev
+      POSTGRES_DB: d2intel
+    ports:
+      - "127.0.0.1:5432:5432"   # только локальный интерфейс
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U d2intel -d d2intel"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+volumes:
+  postgres_data:

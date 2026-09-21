@@ -1,0 +1,6 @@
+# INF-001 — dev-зависимости (линтер/типизация). Pinned.
+# Устанавливаются вместе с runtime:
+#   pip install -r requirements.txt -r requirements-dev.txt
+
+ruff==0.8.4
+mypy==1.14.1
