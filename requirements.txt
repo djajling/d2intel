@@ -1,0 +1,31 @@
+# INF-001 — зафиксированные (pinned) зависимости.
+# Воспроизводимая установка из чистого окружения:
+#   python3.11 -m venv .venv && . .venv/bin/activate
+#   pip install --upgrade pip
+#   pip install -r requirements.txt -r requirements-dev.txt
+#   pip install -e .
+#
+# Запрещённые компоненты отсутствуют: Redis, Celery, Kafka, Kubernetes,
+# feature store, MLflow не входят в critical path (ARCHITECTURE.md §2).
+# Миграции схемы БД не пишутся — это задача DB-001.
+
+# --- Web / API ---
+fastapi==0.115.6
+uvicorn==0.34.0
+
+# --- БД: доступ и миграции (инфраструктура; миграций нет) ---
+sqlalchemy==2.0.36
+alembic==1.14.1
+psycopg[binary]==3.2.3
+
+# --- Dataframe / ML (присутствуют в стеке, доменной логики нет) ---
+pandas==2.2.3
+pyarrow==18.1.0
+scikit-learn==1.6.1
+
+# --- HTTP-клиент / схемы ---
+httpx==0.28.1
+pydantic==2.10.5
+
+# --- Тесты ---
+pytest==8.3.4
