@@ -1,6 +1,6 @@
 # SCHEMA — физическая схема БД (DB-001)
 
-**Статус:** реализовано в миграции `0001` (`alembic/versions/0001_initial_temporal_core.py`)
+**Статус:** реализовано в миграциях `0001` (ядро) и `0002` (ingestion cursor/quarantine, ING-001)
 **Основание:** `docs/PRD_TEMPORAL.md` (`PRD-003`), `DATA_MODEL.md`, `ADR-001` (Accepted), `ADR-005` (Accepted)
 
 Реализуется **только используемое ядро MVP**. Сущности стадий 2/3/F из `DATA_MODEL.md`
@@ -23,6 +23,7 @@
 | Слой | Таблицы | Хранение |
 |---|---|---|
 | Raw | `data_source`, `ingestion_run`, `raw_payload`, `source_observation` | `payload_json` — JSONB; остальное типизировано |
+| Ingestion state (ING-001) | `ingestion_cursor`, `ingestion_quarantine` | курсор — JSONB-состояние пагинации; карантин — типизированная причина + JSONB непригодной строки |
 | Canonical | `team`, `player`, `tournament`, `series`, `game`, `game_team`, `game_participant` | типизированные колонки, PK/FK/индексы |
 | Снимки | `model_version`, `feature_snapshot`, `prediction`, `prediction_snapshot`, `snapshot_evidence`, `prediction_evaluation` | payload/состояние — JSONB, связи — типизированные FK |
 
@@ -82,6 +83,10 @@ system_to             timestamptz  NULL -- открытая системная �
 | Constraint | Смысл |
 |---|---|
 | `raw_payload_content_unique` | дедупликация raw по `(source_id, content_hash)` |
+| `ingestion_cursor_unique` | `UNIQUE (source_id, endpoint_kind)` — один watermark на endpoint |
+| `ingestion_quarantine_unique` | `UNIQUE (source_id, content_hash, reason_code)` — повторный карантин не дублируется |
+| `ingestion_quarantine_reason_present` | причина карантина не может быть пустой |
+| `ingestion_quarantine_status` | статус только `open` / `resolved` |
 | `game_map_attempt_unique` | `UNIQUE (series_id, map_number, attempt_number)` |
 | `game_team_slot_unique`, `game_team_side` | слот уникален; сторона только radiant/dire |
 | `game_participant_player_unique`, `*_slot_unique` | игрок и слот уникальны в карте |
@@ -103,7 +108,9 @@ system_to             timestamptz  NULL -- открытая системная �
 
 `raw_payload(source_id)`, `source_observation(raw_payload_id)`, `game(series_id)`,
 `game_team(game_id)`, `game_participant(game_id)`, `feature_snapshot(cutoff_at)`,
-`prediction_snapshot(prediction_id)`, `prediction_evaluation(snapshot_id)`.
+`prediction_snapshot(prediction_id)`, `prediction_evaluation(snapshot_id)`,
+`ingestion_cursor(source_id)`, `ingestion_quarantine(run_id)`, `ingestion_quarantine(source_id)`,
+`ingestion_quarantine(reason_code)`.
 
 ---
 
@@ -144,3 +151,28 @@ alembic current          # текущая ревизия
 
 Тесты миграций работают с **отдельной** БД `d2intel_test`
 (`D2INTEL_TEST_DATABASE_URL`), потому что `downgrade base` разрушителен.
+
+---
+
+## 9. Дополнение ING-001 (миграция `0002`)
+
+Миграция `alembic/versions/0002_ingestion_cursor_and_quarantine.py` добавляет две
+таблицы, требуемые механизмами `ING-001` (ARCHITECTURE.md §3, пп. 4–6). Она
+аддитивная и обратимая; `0001` не изменяется.
+
+| Таблица | Назначение | Особенности |
+|---|---|---|
+| `ingestion_cursor` | watermark пагинации (`cursor_value`, `cursor_payload`, `last_run_id`) | обновляется **только после** commit raw-данных; `UNIQUE (source_id, endpoint_kind)` |
+| `ingestion_quarantine` | карантин непригодных строк с отдельной data-quality причиной | `reason_code` обязателен; временной конверт присутствует; сырьё остаётся в `raw_payload` |
+
+**Почему у `ingestion_cursor` нет временного конверта.** Это operational checkpoint
+(состояние обхода), а не версия факта источника: у него нет `event_time` и
+`observed_at` в смысле `docs/PRD_TEMPORAL.md`. Наблюдения источника фиксируются
+отдельно — в `source_observation` и `raw_payload`.
+
+**Карантин не удаляет данные.** Строка остаётся в `raw_payload`; карантин хранит
+`reason_code`, `reason_detail`, `request_fingerprint`, `content_hash` и сам
+`offending_payload`, чтобы разбор не требовал повторного запроса к источнику.
+
+Тесты: `tests/ingestion/test_raw_capture.py` (запись, идемпотентность, карантин,
+watermark после commit), `tests/ingestion/test_schema_contract.py` (schema drift).
