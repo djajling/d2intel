@@ -48,3 +48,33 @@
 **CURRENT EPIC:** EPIC 00 — Product specification. **CURRENT TASK:** PRD-001. **WHY IT MATTERS:** зафиксировать target первой карты, scope и измеримые gates до сбора и обучения. **DEPENDENCIES:** нет. **NEXT ACTION:** решение владельца по предложениям PRODUCT.md; затем SRC-001 только по команде.
 
 В этой среде scheduled/recurring tasks недоступны. Пакет описывает требования будущего локального продукта, не создаёт автоматизации помощника.
+
+## Локальный запуск (INF-001)
+
+Минимальный воспроизводимый скелет: PostgreSQL через Docker Compose, FastAPI
+health-эндпоинт, smoke-тест. Доменной логики и миграций схемы нет — они за
+DB-001 / ING-001 / DATA-001 / FEAT-001 / ML-001.
+
+```bash
+# 1. Виртуальное окружение и pinned-зависимости (воспроизводимо)
+python3.11 -m venv .venv && . .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt -r requirements-dev.txt
+pip install -e .
+
+# 2. Поднять PostgreSQL (локально, порт 5432 только на 127.0.0.1)
+cp .env.example .env        # при необходимости переопределить DATABASE_URL
+docker compose up -d
+docker compose ps           # дождаться состояния db: healthy
+
+# 3. Тесты (smoke должен быть зелёным)
+pytest
+
+# 4. API
+uvicorn d2intel.app:app --reload --port 8000
+curl -s http://127.0.0.1:8000/health   # {"status":"ok","database":"up",...}
+
+# 5. Остановить
+docker compose down        # -v удалить том с данными
+```
+

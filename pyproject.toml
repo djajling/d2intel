@@ -1,0 +1,58 @@
+[build-system]
+requires = ["setuptools==75.6.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "d2intel"
+version = "0.0.1"
+description = "Dota Esports Intelligence Platform — local reproducible skeleton (INF-001)."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Proprietary" }
+authors = [{ name = "d2intel solo-founder" }]
+# Зависимости зафиксированы в requirements.txt (pinned). Здесь намеренно пусто,
+# чтобы единым источником правды был requirements.txt (см. INSTALL в README).
+dependencies = []
+
+[project.optional-dependencies]
+dev = []
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# --- pytest ---
+[tool.pytest.ini_options]
+minversion = "8.3.4"
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = "-ra -q"
+# Не превращаем сторонние DeprecationWarning (anyio/starlette и т.п.) в ошибку
+# на этапе импорта TestClient: это ломает collection. Свои предупреждения
+# видно по умолчанию один раз; жёсткий error-режим включается позже по задаче.
+filterwarnings = [
+    "default::DeprecationWarning",
+    "default::PendingDeprecationWarning",
+]
+
+# --- ruff (линтер) ---
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "C4", "SIM"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011"]
+
+# --- mypy (типизация) ---
+[tool.mypy]
+python_version = "3.11"
+packages = ["d2intel"]
+namespace_packages = true
+ignore_missing_imports = true
+warn_unused_ignores = false
+warn_redundant_casts = true
+check_untyped_defs = true
