@@ -1,0 +1,62 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+venv/
+env/
+.python-version
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg-info/
+build/
+dist/
+*.whl
+
+# ---- Секреты и локальная конфигурация ----
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# ---- Данные и артефакты (локально, не в git) ----
+# Сырые/нормализованные данные, model artifacts, экспорты — тяжёлые и
+# пересоздаваемые. Вносятся в репозиторий только по явному решению владельца
+# (например manifest-списки, а не сами бинарники).
+data/
+raw/
+artifacts/
+models/
+checkpoints/
+*.parquet
+*.feather
+*.csv.zip
+backups/
+
+# ---- Локальные БД/стек (Docker) ----
+*.sqlite3
+*.db
+pgdata/
+postgres_data/
+.docker-data/
+
+# ---- IDE / ОС ----
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# ---- Логи ----
+*.log
+logs/
+
+# ---- Инструменты / временное ----
+/tmp/
+.artifacts/
