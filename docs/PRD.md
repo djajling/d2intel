@@ -50,6 +50,9 @@ Per-game `p` обновляется после каждого нового др�
 | retrospective_reconstructed | История получена сейчас, `available_at` = assumed lag policy |
 | prospective_observed | Данные реально накоплены системой до cutoff |
 
+Полная спецификация временной семантики (пять временных полей, инварианты порядка, правило cutoff,
+immutability снимков, словарь меток, маски доступности) — [`docs/PRD_TEMPORAL.md`](PRD_TEMPORAL.md) (`PRD-003`, утверждена 2026-09-21).
+
 ---
 
 ## 3. Правила cutoff
@@ -119,7 +122,9 @@ Per-game `p` обновляется после каждого нового др�
 | Версия | Дата | Изменение |
 |---|---|---|
 | v0 | 2026-09-21 | bo1/bo3/bo5 scope; post-draft trigger; 70% per-game gate; derived series probability |
+| v0.1 | 2026-09-21 | ссылка на утверждённую спеку временной семантики `PRD-003` / `docs/PRD_TEMPORAL.md` |
 
 ---
 
-**NEXT:** SRC-001 — bounded read-only audit OpenDota + Liquipedia.
+**NEXT:** DB-001 — минимальная ядровая temporal-схема + snapshots/migrations/constraints
+(зависит от `INF-001` и `PRD-003`; оба выполнены).
