@@ -1,0 +1,63 @@
+{
+  "contract_version": "0.1.0-mock",
+  "demo": true,
+  "evaluation_mode": "retrospective_reconstructed",
+  "disclaimer": "Моковый контракт первого прототипа. Все цифры демонстрационные, не live-прогноз и не совет для ставок. В реальной системе эти поля заполняются адаптерами источников и as-of feature builder.",
+  "target_note": "ВНИМАНИЕ: docs/PRD.md определяет цель как карта N ПОСЛЕ драфта, а корневые документы — первая карта ДО драфта. Цель прогноза требует согласования владельцем через ADR до подключения реального API.",
+  "snapshot_id": "#000124",
+  "computed_at": "2026-09-21T18:42:00Z",
+  "cutoff_at": "2026-09-21T18:00:00Z",
+  "data_age": "reconstructed",
+  "model_version_id": "demo-v0.0.0",
+  "feature_snapshot_id": "fs-000124",
+  "sources": [
+    { "id": "opendota", "kind": "history", "access": "mock", "rights": "pending_review" },
+    { "id": "liquipedia", "kind": "roster", "access": "mock", "rights": "pending_review" }
+  ],
+  "fixture": {
+    "tournament": "FISSURE PLAYGROUND 2",
+    "stage": null,
+    "series_format": "BO3",
+    "game_number": 1,
+    "patch": "7.39E",
+    "team_a": { "name": "Spirit", "roster_status": "confirmed" },
+    "team_b": { "name": "Falcons", "roster_status": "announced" }
+  },
+  "prediction": {
+    "team_a_win_probability": 0.62,
+    "team_b_win_probability": 0.38,
+    "abstention": false,
+    "confidence": 0.71,
+    "confidence_note": "Достаточно данных для оценки",
+    "slider": { "min": 35, "max": 75, "default": 62 },
+    "scenario_bands": [
+      { "upto": 47, "label": "Преимущество Falcons" },
+      { "upto": 54, "label": "Почти равные шансы" },
+      { "upto": 66, "label": "Умеренное преимущество" },
+      { "upto": 101, "label": "Выраженное преимущество" }
+    ]
+  },
+  "evidence": [
+    { "label": "форма за 30 дней", "delta": 8.4, "direction": "positive" },
+    { "label": "стабильность ростера", "delta": 4.2, "direction": "positive" },
+    { "label": "сила соперников", "delta": -2.8, "direction": "negative" }
+  ],
+  "hero_pool": [
+    { "name": "Phantom Assassin", "image": "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/phantom_assassin.png", "demo": true },
+    { "name": "Puck", "image": "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/puck.png", "demo": true },
+    { "name": "Earthshaker", "image": "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/earthshaker.png", "demo": true }
+  ],
+  "form_trajectory": {
+    "window_days": 90,
+    "team_a_path": "M0 165 C40 148 75 180 120 150 S200 125 245 138 S318 90 365 108 S437 78 485 95 S555 45 605 68 S655 32 690 40 L690 220 L0 220Z",
+    "team_a_line": "M0 165 C40 148 75 180 120 150 S200 125 245 138 S318 90 365 108 S437 78 485 95 S555 45 605 68 S655 32 690 40",
+    "team_b_line": "M0 112 C40 96 75 130 120 110 S202 140 245 120 S325 155 365 138 S440 164 485 135 S565 158 605 142 S650 165 690 151",
+    "team_a_end": { "x": 690, "y": 40 },
+    "team_b_end": { "x": 690, "y": 151 }
+  },
+  "ledger": [
+    { "snapshot_id": "#000124", "team_a": "Spirit", "team_b": "Falcons", "event": "Fissure Playground · Game 1", "prob_chip": "62% SPIRIT", "result": "—", "status": "PENDING", "status_kind": "open" },
+    { "snapshot_id": "#000119", "team_a": "BetBoom", "team_b": "Spirit", "event": "DreamLeague · Game 1", "prob_chip": "54% BETBOOM", "result": "BETBOOM WON", "status": "RESOLVED", "status_kind": "resolved" },
+    { "snapshot_id": "#000113", "team_a": "Falcons", "team_b": "Liquid", "event": "BLAST Slam · Game 1", "prob_chip": "57% FALCONS", "result": "LIQUID WON", "status": "RESOLVED", "status_kind": "miss" }
+  ]
+}

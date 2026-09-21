@@ -62,7 +62,7 @@
             <p class="panel-label">FEATURED FIXTURE</p>
             <span class="tag tag--live">DEMO</span>
           </div>
-          <div class="match-meta">
+          <div class="match-meta" id="match-meta">
             <span>FISSURE PLAYGROUND 2</span>
             <span>•</span>
             <span>BO3 / GAME 1</span>
@@ -71,17 +71,11 @@
           </div>
 
           <div class="hero-constellation" aria-hidden="true">
-            <div class="hero-portrait hero-portrait--one"><img src="https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/phantom_assassin.png" alt="" loading="lazy" decoding="async" /><span class="hero-tag">DEMO</span><span class="hero-name">Phantom Assassin</span></div>
-            <div class="hero-portrait hero-portrait--two"><img src="https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/puck.png" alt="" loading="lazy" decoding="async" /><span class="hero-tag">DEMO</span><span class="hero-name">Puck</span></div>
-            <div class="hero-portrait hero-portrait--three"><img src="https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/earthshaker.png" alt="" loading="lazy" decoding="async" /><span class="hero-tag">DEMO</span><span class="hero-name">Earthshaker</span></div>
+            <div class="hero-portraits" id="hero-portraits"></div>
             <span class="scan-line scan-line--one"></span><span class="scan-line scan-line--two"></span>
           </div>
           <p class="hero-pool-label"><span></span>ILLUSTRATIVE HERO POOL / NOT A DRAFT</p>
-          <ul class="hero-chips" aria-label="Иллюстративные герои прототипа (демо, не драфт)">
-            <li>Phantom Assassin</li>
-            <li>Puck</li>
-            <li>Earthshaker</li>
-          </ul>
+          <ul class="hero-chips" id="hero-chips" aria-label="Иллюстративные герои прототипа (демо, не драфт)"></ul>
 
           <div class="teams">
             <div class="team team--a">
@@ -94,14 +88,14 @@
             <div class="team team--b">
               <span class="team-logo team-logo--falcons"><img src="https://img-cdn.hltv.org/teamlogo/4eJSkDQINNM6Tbs4WvLzkN.png?ixlib=java-2.1.0&amp;s=21613e9a4eb0302486984b3c3536202e&amp;w=500" alt="Логотип Team Falcons" data-mono="TF" loading="lazy" decoding="async" /></span>
               <span class="team-orb team-orb--b" aria-hidden="true"></span>
-              <div class="team-copy team-copy--right"><p>TEAM</p><h2>Falcons</h2></div>
+              <div class="team-copy team-copy--right"><p>TEAM</p><h2 id="team-b-name">Falcons</h2></div>
               <span class="team-number">02</span>
             </div>
           </div>
 
           <div class="probability-block" data-reveal>
             <div class="probability-heading">
-              <span>Вероятность Team Spirit</span>
+              <span>Вероятность <span id="team-a-label">Team Spirit</span></span>
               <strong><output id="probability-value">62</output><small>%</small></strong>
             </div>
             <div class="probability-track" aria-hidden="true"><span id="probability-fill"></span><span class="probability-pulse"></span></div>
@@ -113,22 +107,20 @@
             <p id="scenario-help" class="assistive-copy">Демонстрационный контрол: не изменяет исторический снимок. Это не прогноз и не совет для ставок.</p>
             <p class="sr-only" aria-live="polite" id="scenario-live"></p>
           </div>
+
+          <dl class="provenance" id="provenance" aria-label="Происхождение снимка"></dl>
         </article>
 
         <aside class="signal-card panel" aria-labelledby="signal-heading" data-reveal>
           <div class="panel-label-row">
             <p class="panel-label" id="signal-heading">SIGNAL SNAPSHOT</p>
-            <span class="capture">CAPTURED 18:42 UTC</span>
+            <span class="capture" id="signal-capture">CAPTURED 18:42 UTC</span>
           </div>
           <div class="signal-score">
             <span class="signal-ring" aria-hidden="true"><i></i></span>
-            <div><span class="metric-name">MODEL CONFIDENCE</span><strong>0.71</strong><p>Достаточно данных для оценки</p></div>
+            <div><span class="metric-name">MODEL CONFIDENCE</span><strong id="signal-confidence">0.71</strong><p id="signal-confidence-note">Достаточно данных для оценки</p></div>
           </div>
-          <div class="evidence-list">
-            <div class="evidence"><span class="evidence-bar evidence-bar--positive"></span><div><strong>+8.4%</strong><span>форма за 30 дней</span></div></div>
-            <div class="evidence"><span class="evidence-bar evidence-bar--positive evidence-bar--short"></span><div><strong>+4.2%</strong><span>стабильность ростера</span></div></div>
-            <div class="evidence"><span class="evidence-bar evidence-bar--negative"></span><div><strong>−2.8%</strong><span>сила соперников</span></div></div>
-          </div>
+          <div class="evidence-list" id="evidence-list"></div>
           <a class="text-link" href="#method">Показать метод <span>↗</span></a>
         </aside>
       </section>
@@ -143,10 +135,10 @@
             <div class="chart-grid"><i></i><i></i><i></i><i></i></div>
             <svg viewBox="0 0 690 220" preserveAspectRatio="none" aria-hidden="true">
               <defs><linearGradient id="areaA" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c8ff65" stop-opacity=".24"/><stop offset="1" stop-color="#c8ff65" stop-opacity="0"/></linearGradient></defs>
-              <path class="area" d="M0 165 C40 148 75 180 120 150 S200 125 245 138 S318 90 365 108 S437 78 485 95 S555 45 605 68 S655 32 690 40 L690 220 L0 220Z" fill="url(#areaA)"/>
-              <path class="line line--a" d="M0 165 C40 148 75 180 120 150 S200 125 245 138 S318 90 365 108 S437 78 485 95 S555 45 605 68 S655 32 690 40"/>
-              <path class="line line--b" d="M0 112 C40 96 75 130 120 110 S202 140 245 120 S325 155 365 138 S440 164 485 135 S565 158 605 142 S650 165 690 151"/>
-              <circle class="chart-end" cx="690" cy="40" r="5"/><circle class="chart-end chart-end--b" cx="690" cy="151" r="5"/>
+              <path id="area-a" class="area" d="M0 165 C40 148 75 180 120 150 S200 125 245 138 S318 90 365 108 S437 78 485 95 S555 45 605 68 S655 32 690 40 L690 220 L0 220Z" fill="url(#areaA)"/>
+              <path id="line-a" class="line line--a" d="M0 165 C40 148 75 180 120 150 S200 125 245 138 S318 90 365 108 S437 78 485 95 S555 45 605 68 S655 32 690 40"/>
+              <path id="line-b" class="line line--b" d="M0 112 C40 96 75 130 120 110 S202 140 245 120 S325 155 365 138 S440 164 485 135 S565 158 605 142 S650 165 690 151"/>
+              <circle id="chart-end-a" class="chart-end" cx="690" cy="40" r="5"/><circle id="chart-end-b" class="chart-end chart-end--b" cx="690" cy="151" r="5"/>
             </svg>
             <div class="chart-label chart-label--top">+12</div><div class="chart-label chart-label--bottom">−12</div>
           </div>
@@ -155,8 +147,7 @@
 
         <article class="panel roster-panel" aria-labelledby="roster-heading" data-reveal>
           <div class="panel-label-row"><div><p class="panel-label" id="roster-heading">ROSTER STATUS</p><p class="panel-subtitle">Составы на момент снимка</p></div><span class="tag">AS OF</span></div>
-          <div class="roster-row"><span class="roster-team">SPIRIT</span><div class="player-dots"><i></i><i></i><i></i><i></i><i></i></div><span class="roster-status roster-status--good">CONFIRMED</span></div>
-          <div class="roster-row"><span class="roster-team">FALCONS</span><div class="player-dots"><i></i><i></i><i></i><i></i><i></i></div><span class="roster-status roster-status--neutral">ANNOUNCED</span></div>
+          <div id="roster-rows"></div>
           <p class="roster-note">Статус состава — отдельный сигнал. Неизвестность не подменяется фактом.</p>
         </article>
       </section>
@@ -165,21 +156,84 @@
         <div class="section-heading"><div><p class="eyebrow">TRACEABLE HISTORY</p><h2 id="ledger-heading">Журнал <em>проверяемых</em> прогнозов</h2></div><button class="filter-button" type="button" aria-pressed="false"><span></span>Только завершённые</button></div>
         <div class="ledger panel" role="table" aria-label="Журнал демонстрационных прогнозов">
           <div class="ledger-head" role="row"><span role="columnheader">СНИМОК</span><span role="columnheader">МАТЧ</span><span role="columnheader">ПРОГНОЗ</span><span role="columnheader">РЕЗУЛЬТАТ</span><span role="columnheader">СТАТУС</span></div>
-          <a class="ledger-row" href="#match" role="row" tabindex="0"><span class="mono" role="cell">#000124</span><span role="cell"><strong>Spirit</strong> <i>vs</i> Falcons<small>Fissure Playground · Game 1</small></span><span class="prob-chip" role="cell">62% SPIRIT</span><span role="cell" class="pending">—</span><span role="cell"><b class="status-pill status-pill--open">PENDING</b></span></a>
-          <div class="ledger-row" role="row" tabindex="0"><span class="mono" role="cell">#000119</span><span role="cell"><strong>BetBoom</strong> <i>vs</i> Spirit<small>DreamLeague · Game 1</small></span><span class="prob-chip" role="cell">54% BETBOOM</span><span role="cell" class="outcome">BETBOOM WON</span><span role="cell"><b class="status-pill">RESOLVED</b></span></div>
-          <div class="ledger-row" role="row" tabindex="0"><span class="mono" role="cell">#000113</span><span role="cell"><strong>Falcons</strong> <i>vs</i> Liquid<small>BLAST Slam · Game 1</small></span><span class="prob-chip" role="cell">57% FALCONS</span><span role="cell" class="outcome outcome--miss">LIQUID WON</span><span role="cell"><b class="status-pill">RESOLVED</b></span></div>
+          <div id="ledger-body"></div>
         </div>
       </section>
 
       <section id="method" class="method-section panel" data-reveal>
         <p class="panel-label">THE CONTRACT</p>
-        <div><h2>Каждый ответ можно<br />разобрать <em>обратно до фактов.</em></h2><p>В продакшене здесь будут ссылки на источники, время доступности, версию модели и неизменяемый снимок признаков. Пока это визуальная модель интерфейса.</p></div>
+        <div><h2>Каждый ответ можно<br />разобрать <em>обратно до фактов.</em></h2><p>В продакшене здесь будут ссылки на источники, время доступности, версию модели и неизменяемый снимок признаков. Пока это визуальная модель интерфейса и моковый контракт данных.</p></div>
         <a class="method-link" href="../PRODUCT.md">Открыть Product Vision <span>→</span></a>
       </section>
     </main>
 
     <footer class="footer page-width"><span>© 2026 D2INTEL</span><span>PERSONAL RESEARCH TOOL / DEMO INTERFACE</span><a href="#top">НАВЕРХ ↑</a></footer>
+
+    <script type="application/json" id="match-contract-fallback">
+{
+  "contract_version": "0.1.0-mock",
+  "demo": true,
+  "evaluation_mode": "retrospective_reconstructed",
+  "disclaimer": "Моковый контракт первого прототипа. Все цифры демонстрационные, не live-прогноз и не совет для ставок.",
+  "target_note": "ВНИМАНИЕ: docs/PRD.md определяет цель как карта N ПОСЛЕ драфта, а корневые документы — первая карта ДО драфта. Цель прогноза требует согласования владельцем через ADR до подключения реального API.",
+  "snapshot_id": "#000124",
+  "computed_at": "2026-09-21T18:42:00Z",
+  "cutoff_at": "2026-09-21T18:00:00Z",
+  "data_age": "reconstructed",
+  "model_version_id": "demo-v0.0.0",
+  "feature_snapshot_id": "fs-000124",
+  "sources": [
+    { "id": "opendota", "kind": "history", "access": "mock", "rights": "pending_review" },
+    { "id": "liquipedia", "kind": "roster", "access": "mock", "rights": "pending_review" }
+  ],
+  "fixture": {
+    "tournament": "FISSURE PLAYGROUND 2",
+    "stage": null,
+    "series_format": "BO3",
+    "game_number": 1,
+    "patch": "7.39E",
+    "team_a": { "name": "Spirit", "roster_status": "confirmed" },
+    "team_b": { "name": "Falcons", "roster_status": "announced" }
+  },
+  "prediction": {
+    "team_a_win_probability": 0.62,
+    "team_b_win_probability": 0.38,
+    "abstention": false,
+    "confidence": 0.71,
+    "confidence_note": "Достаточно данных для оценки",
+    "slider": { "min": 35, "max": 75, "default": 62 },
+    "scenario_bands": [
+      { "upto": 47, "label": "Преимущество Falcons" },
+      { "upto": 54, "label": "Почти равные шансы" },
+      { "upto": 66, "label": "Умеренное преимущество" },
+      { "upto": 101, "label": "Выраженное преимущество" }
+    ]
+  },
+  "evidence": [
+    { "label": "форма за 30 дней", "delta": 8.4, "direction": "positive" },
+    { "label": "стабильность ростера", "delta": 4.2, "direction": "positive" },
+    { "label": "сила соперников", "delta": -2.8, "direction": "negative" }
+  ],
+  "hero_pool": [
+    { "name": "Phantom Assassin", "image": "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/phantom_assassin.png", "demo": true },
+    { "name": "Puck", "image": "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/puck.png", "demo": true },
+    { "name": "Earthshaker", "image": "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/earthshaker.png", "demo": true }
+  ],
+  "form_trajectory": {
+    "window_days": 90,
+    "team_a_path": "M0 165 C40 148 75 180 120 150 S200 125 245 138 S318 90 365 108 S437 78 485 95 S555 45 605 68 S655 32 690 40 L690 220 L0 220Z",
+    "team_a_line": "M0 165 C40 148 75 180 120 150 S200 125 245 138 S318 90 365 108 S437 78 485 95 S555 45 605 68 S655 32 690 40",
+    "team_b_line": "M0 112 C40 96 75 130 120 110 S202 140 245 120 S325 155 365 138 S440 164 485 135 S565 158 605 142 S650 165 690 151",
+    "team_a_end": { "x": 690, "y": 40 },
+    "team_b_end": { "x": 690, "y": 151 }
+  },
+  "ledger": [
+    { "snapshot_id": "#000124", "team_a": "Spirit", "team_b": "Falcons", "event": "Fissure Playground · Game 1", "prob_chip": "62% SPIRIT", "result": "—", "status": "PENDING", "status_kind": "open" },
+    { "snapshot_id": "#000119", "team_a": "BetBoom", "team_b": "Spirit", "event": "DreamLeague · Game 1", "prob_chip": "54% BETBOOM", "result": "BETBOOM WON", "status": "RESOLVED", "status_kind": "resolved" },
+    { "snapshot_id": "#000113", "team_a": "Falcons", "team_b": "Liquid", "event": "BLAST Slam · Game 1", "prob_chip": "57% FALCONS", "result": "LIQUID WON", "status": "RESOLVED", "status_kind": "miss" }
+  ]
+}
+    </script>
     <script src="./app.js"></script>
   </body>
 </html>
-
