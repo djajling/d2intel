@@ -92,3 +92,17 @@ alembic downgrade base   # откатить (обратимо)
 Миграционные тесты destructive (`downgrade base`), поэтому работают с отдельной БД
 `d2intel_test`, задаваемой через `D2INTEL_TEST_DATABASE_URL`.
 
+## Нормализация исторического ядра (DATA-001)
+
+Поверх raw-слоя (`ING-001`) работает нормализация: серии, карты, номер карты,
+участники, финальная статистика и свидетельства состава. Правила —
+[`docs/NORMALIZATION.md`](docs/NORMALIZATION.md), схема — миграция `0003`.
+
+```bash
+python scripts/ingest_opendota_once.py --pages 1   # сначала raw
+python scripts/normalize_once.py                   # затем canonical (идемпотентно)
+```
+
+Неоднозначный map1 не попадает в датасет: карта пишется с `map_number = NULL`
+и уходит в `normalization_quarantine`.
+
