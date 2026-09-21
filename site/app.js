@@ -72,7 +72,7 @@ function renderHeroes(pool) {
       const fig = document.createElement('div');
       fig.className = `hero-portrait hero-portrait--${n === 1 ? 'one' : n === 2 ? 'two' : 'three'}`;
       fig.innerHTML =
-        `<img src="${hero.image}" alt="" loading="lazy" decoding="async" />` +
+        `<img src="${hero.image}" alt="" data-mono="${hero.name.charAt(0)}" loading="lazy" decoding="async" />` +
         '<span class="hero-tag">DEMO</span>' +
         `<span class="hero-name">${hero.name}</span>`;
       portraits.appendChild(fig);

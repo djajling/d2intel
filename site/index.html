@@ -82,11 +82,17 @@
               <span class="team-number">01</span>
               <div class="team-copy"><p>TEAM</p><h2 id="match-heading">Spirit</h2></div>
               <span class="team-orb team-orb--a" aria-hidden="true"></span>
-              <span class="team-logo team-logo--spirit"><img src="https://gamesettings.top/assets/images/game/149/logo.png" alt="Логотип Team Spirit" data-mono="TS" loading="lazy" decoding="async" /></span>
+              <!-- Логотипы команд намеренно НЕ подгружаются с внешних CDN: права не подтверждены.
+                   Пока рисуется монограмма. Перед релизом положить локальный файл
+                   (site/assets/logos/spirit.png, права подтверждены) и заменить блок на:
+                   <img src="./assets/logos/spirit.png" alt="Логотип Team Spirit" data-mono="TS" /> -->
+              <span class="team-logo team-logo--spirit asset-failed" data-mono="TS" role="img" aria-label="Логотип Team Spirit"></span>
             </div>
             <div class="versus" aria-label="против">VS</div>
             <div class="team team--b">
-              <span class="team-logo team-logo--falcons"><img src="https://img-cdn.hltv.org/teamlogo/4eJSkDQINNM6Tbs4WvLzkN.png?ixlib=java-2.1.0&amp;s=21613e9a4eb0302486984b3c3536202e&amp;w=500" alt="Логотип Team Falcons" data-mono="TF" loading="lazy" decoding="async" /></span>
+              <!-- Прежний источник (img-cdn.hltv.org) был чужим CDN и отдавал 404 — заменён на монограмму.
+                   Перед релизом: site/assets/logos/falcons.png (права подтверждены) + <img data-mono="TF" />. -->
+              <span class="team-logo team-logo--falcons asset-failed" data-mono="TF" role="img" aria-label="Логотип Team Falcons"></span>
               <span class="team-orb team-orb--b" aria-hidden="true"></span>
               <div class="team-copy team-copy--right"><p>TEAM</p><h2 id="team-b-name">Falcons</h2></div>
               <span class="team-number">02</span>
@@ -98,7 +104,10 @@
               <span>Вероятность <span id="team-a-label">Team Spirit</span></span>
               <strong><output id="probability-value">62</output><small>%</small></strong>
             </div>
-            <div class="probability-track" aria-hidden="true"><span id="probability-fill"></span><span class="probability-pulse"></span></div>
+            <div class="probability-track-wrap">
+              <div class="probability-track" aria-hidden="true"><span id="probability-fill"></span></div>
+              <span class="probability-pulse" aria-hidden="true"></span>
+            </div>
             <div class="probability-scale"><span>FALCONS</span><span>НЕЙТРАЛЬНО</span><span>SPIRIT</span></div>
             <label class="slider-label" for="probability-control">
               <span>Изменить сценарий</span><span id="scenario-name">Умеренное преимущество</span>
@@ -215,9 +224,9 @@
     { "label": "сила соперников", "delta": -2.8, "direction": "negative" }
   ],
   "hero_pool": [
-    { "name": "Phantom Assassin", "image": "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/phantom_assassin.png", "demo": true },
-    { "name": "Puck", "image": "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/puck.png", "demo": true },
-    { "name": "Earthshaker", "image": "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/earthshaker.png", "demo": true }
+    { "name": "Phantom Assassin", "image": "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/heroes/phantom_assassin_vert.jpg", "aspect": "235x272", "demo": true },
+    { "name": "Puck", "image": "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/heroes/puck_vert.jpg", "aspect": "235x272", "demo": true },
+    { "name": "Earthshaker", "image": "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/heroes/earthshaker_vert.jpg", "aspect": "235x272", "demo": true }
   ],
   "form_trajectory": {
     "window_days": 90,

@@ -43,9 +43,9 @@
     { "label": "сила соперников", "delta": -2.8, "direction": "negative" }
   ],
   "hero_pool": [
-    { "name": "Phantom Assassin", "image": "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/phantom_assassin.png", "demo": true },
-    { "name": "Puck", "image": "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/puck.png", "demo": true },
-    { "name": "Earthshaker", "image": "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/earthshaker.png", "demo": true }
+    { "name": "Phantom Assassin", "image": "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/heroes/phantom_assassin_vert.jpg", "aspect": "235x272", "demo": true },
+    { "name": "Puck", "image": "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/heroes/puck_vert.jpg", "aspect": "235x272", "demo": true },
+    { "name": "Earthshaker", "image": "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/heroes/earthshaker_vert.jpg", "aspect": "235x272", "demo": true }
   ],
   "form_trajectory": {
     "window_days": 90,
