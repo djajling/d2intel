@@ -30,6 +30,12 @@ EXPECTED_TABLES = {
     "game",
     "game_team",
     "game_participant",
+    # DATA-001: справочники, маппинг, свидетельства состава, статистика
+    "patch",
+    "entity_mapping",
+    "roster_membership",
+    "player_performance",
+    "normalization_quarantine",
     # снимки и воспроизводимость
     "model_version",
     "feature_snapshot",
@@ -59,6 +65,11 @@ VERSIONED_TABLES = {
     "game",
     "game_team",
     "game_participant",
+    "patch",
+    "entity_mapping",
+    "roster_membership",
+    "player_performance",
+    "normalization_quarantine",
     "feature_snapshot",
     "prediction_snapshot",
 }

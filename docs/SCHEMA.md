@@ -1,6 +1,6 @@
 # SCHEMA — физическая схема БД (DB-001)
 
-**Статус:** реализовано в миграциях `0001` (ядро) и `0002` (ingestion cursor/quarantine, ING-001)
+**Статус:** реализовано в миграциях `0001` (ядро), `0002` (ingestion cursor/quarantine, ING-001) и `0003` (нормализованное ядро, DATA-001)
 **Основание:** `docs/PRD_TEMPORAL.md` (`PRD-003`), `DATA_MODEL.md`, `ADR-001` (Accepted), `ADR-005` (Accepted)
 
 Реализуется **только используемое ядро MVP**. Сущности стадий 2/3/F из `DATA_MODEL.md`
@@ -25,6 +25,8 @@
 | Raw | `data_source`, `ingestion_run`, `raw_payload`, `source_observation` | `payload_json` — JSONB; остальное типизировано |
 | Ingestion state (ING-001) | `ingestion_cursor`, `ingestion_quarantine` | курсор — JSONB-состояние пагинации; карантин — типизированная причина + JSONB непригодной строки |
 | Canonical | `team`, `player`, `tournament`, `series`, `game`, `game_team`, `game_participant` | типизированные колонки, PK/FK/индексы |
+| Canonical (DATA-001) | `patch`, `entity_mapping`, `roster_membership`, `player_performance` | типизированные колонки; JSONB только `evidence` |
+| Карантин нормализации (DATA-001) | `normalization_quarantine` | причина + JSONB спорного фрагмента |
 | Снимки | `model_version`, `feature_snapshot`, `prediction`, `prediction_snapshot`, `snapshot_evidence`, `prediction_evaluation` | payload/состояние — JSONB, связи — типизированные FK |
 
 JSONB встречается **только** там, где payload по природе переменный:
@@ -176,3 +178,53 @@ alembic current          # текущая ревизия
 
 Тесты: `tests/ingestion/test_raw_capture.py` (запись, идемпотентность, карантин,
 watermark после commit), `tests/ingestion/test_schema_contract.py` (schema drift).
+
+---
+
+## 10. Дополнение DATA-001 (миграция `0003`)
+
+Миграция `alembic/versions/0003_normalized_core.py` — аддитивная и обратимая.
+Полные правила нормализации вынесены в `docs/NORMALIZATION.md`; здесь — только
+то, что видно в схеме.
+
+### 10.1 Provenance canonical-слоя
+
+`source_observation_id uuid NOT NULL REFERENCES source_observation(id)` добавлен
+на `team`, `player`, `tournament`, `series`, `game`, `game_team`,
+`game_participant`. Требование `DATA-001` AC#1 проверяется схемой, а не
+соглашением. `series.series_key` и `game.provider_match_id` — ключи
+группировки/трассировки.
+
+### 10.2 Новые таблицы
+
+| Таблица | Назначение | Ключевые ограничения |
+|---|---|---|
+| `patch` | справочник патчей | `UNIQUE (version_label)`; интервал `effective_from` → `effective_to` |
+| `entity_mapping` | provider → canonical для `team`/`player`/`tournament` | typed FK + `entity_mapping_target_xor` + соответствие типа; один активный маппинг на `(source, type, external_id)` (partial unique index) |
+| `roster_membership` | свидетельство состава с датами | `UNIQUE (team_id, player_id, game_id)`; `valid_to IS NULL OR valid_from < valid_to` |
+| `player_performance` | финальная статистика карты | `UNIQUE (game_participant_id)`; `data_class IN ('final','partial')` |
+| `normalization_quarantine` | карантин нормализации | `UNIQUE (job_kind, source_id, provider_entity_id, reason_code)`; `status IN ('open','resolved')` |
+
+`game.patch_id` добавлен отдельной колонкой (typed FK, не JSONB).
+
+### 10.3 Честная идентичность
+
+`team.canonical_name` и `player.canonical_name` теперь допускают `NULL`, но
+только при `identity_status = 'unresolved'` (`team_name_or_unresolved`,
+`player_name_or_unresolved`). `tournament.name` допускает `NULL`: `league_name`
+в источнике может отсутствовать.
+
+### 10.4 Почему отдельный карантин нормализации
+
+`ingestion_quarantine` описывает «строка источника непригодна» и живёт в
+пространстве ключей ingestion (`endpoint_kind`, `content_hash`). У нормализации
+другой этап и другой ключ (`job_kind`, `provider_entity_id`). Смешивать их
+значит потерять смысл `reason_code`.
+
+### 10.5 Тесты
+
+`tests/normalize/test_map_index.py` (правила серий/карт как чистые функции),
+`tests/normalize/test_identity.py` (детерминизм canonical id),
+`tests/normalize/test_pipeline.py` (end-to-end на реальном raw: идемпотентность,
+карантин map1, связность raw↔canonical, ростеры, финальная статистика, патчи),
+`tests/normalize/test_schema.py` (ограничения новых таблиц).
