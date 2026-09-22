@@ -1,0 +1,20 @@
+{
+  "spec": {
+    "valid_from": "2026-06-24T19:33:07.600000+03:00",
+    "test_from": "2026-08-08T16:26:50.800000+03:00",
+    "embargo_seconds": 86400.0
+  },
+  "counts": {
+    "train": 3212,
+    "valid": 110,
+    "test": 131,
+    "excluded": 2
+  },
+  "segment_hashes": {
+    "train": "9d6bc990c1a73efa50dd39ddd85a773104f3722977faf96efd97b297e0de964c",
+    "valid": "0301a5be1d188cad8c0962b9e9264d0f73653b524396c4fe688afc78a2bc05b5",
+    "test": "1f710ef2de01eb9e8d7c079e3b0c688b68dadad8166006254aac230529c18b6b"
+  },
+  "content_hash": "eb4787083a560cd79246161414b24348cb80cd6ece98ade05ba8c91efa0f8ce0",
+  "frozen_at": "2026-09-22T18:41:57.231052+00:00"
+}

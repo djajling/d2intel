@@ -145,11 +145,57 @@ python scripts/backfill_game_patch.py
   начале окна) наблюдений раньше cutoff мало или нет → признаки формы обязаны
   отдавать `null`/маску, а не «0».
 
+## Шаг 5 — заморозка сплита (pre-registration ML-001)
+
+```bash
+python scripts/freeze_split.py
+```
+
+Записан манифест `docs/frozen_split_2026-09-22.json`:
+
+| Поле | Значение |
+|---|---|
+| `content_hash` | `eb4787083a560cd79246161414b24348cb80cd6ece98ade05ba8c91efa0f8ce0` |
+| train / valid / test / excluded | 3212 / 110 / 131 / 2 |
+| границы | valid_from 2026-06-24 19:33 (+03), test_from 2026-08-08 16:26 (+03) |
+| embargo | 24 h |
+
+Хэш покрывает спеку и отсортированные id серий и карт по сегментам. Любое
+дообучение внутри замороженного диапазона меняет хэш — и `run_prior_baseline.py`
+откажется работать (код 73), пока заморозка не будет явным образом обновлена.
+
+## Шаг 6 — первый baseline и первые предсказания
+
+```bash
+python scripts/run_prior_baseline.py docs/frozen_split_2026-09-22.json
+```
+
+| Поле | Значение |
+|---|---|
+| алгоритм | `prior_const` (`feature_schema_version = none.v1`) |
+| `p_a` | 0.5131 (частота побед Team A на train, `fitted_n = 3212`) |
+| `training_cutoff` | 2026-06-23 19:33 (+03) |
+| accuracy на test | 0.5191 |
+| log_loss на test | 0.6925 (reference ln 2 = 0.6931) |
+| Brier на test | 0.2497 |
+| bootstrap log_loss (95%, по сериям) | 0.6881 … 0.6969 |
+| порог ADR-006 | **not met** (0.5191 < 0.70) — ожидаемо, prior не кандидат на порог |
+
+Записано в БД: `model_version` 1, `prediction` 131, `prediction_snapshot` 131,
+`prediction_evaluation` 131. Перезапуск скрипта проверен — дублей нет
+(идемпотентность по `idempotency_key` и `run_key`). Подробности — `docs/BASELINE.md`.
+
 ## Проверки
 
-- `ruff check src tests scripts` → All checks passed
-- `mypy src` → Success, 24 source files
-- `pytest -q` → **259 passed**
+- `ruff check .` → All checks passed
+- `mypy src` → Success, 34 source files; `mypy scripts` → Success, 8 source files
+- `pytest -q` → **324 passed**
+- `mypy tests` → **блокируется сторонним стабом**: `numpy/__init__.pyi:737
+  Type statement is only supported in Python 3.12 and greater` при
+  `[tool.mypy] python_version = "3.11"`. Воспроизводится на дереве до этого
+  коммита, то есть это не следствие текущих изменений. Рекомендация владельцу:
+  поднять `python_version` до `"3.12"` (в пределах `requires-python = ">=3.11"`),
+  если нужен тип-чек тестов.
 
 ## Воспроизведение
 

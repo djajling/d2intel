@@ -18,3 +18,12 @@ entrypoints, вызывающие код из `src/d2intel`.
   ограниченный `--pages`, throttle/retry внутри клиента, запись raw. Реальных
   запросов в тестах нет; запуск вручную. Коды возврата: 0 completed, 2 partial
   (неполный охват, не ошибка), 3 stale, 4 failed, 5 quota_exhausted.
+- `build_game1_cohort.py` — состав game1-когорты и временные сегменты;
+  сообщает major-class floor. Не обучает и не записывает предсказания.
+- `freeze_split.py` — **заморозка** train/valid/test (pre-registration `ML-001`):
+  пишет `docs/frozen_split_<date>.json` с sha256 состава. Отказывается
+  перезаписывать манифест, если когорта изменилась (код 73), если не `--force`.
+- `run_prior_baseline.py` — первый baseline на замороженном сплите: фит prior
+  только на train, метрики относительно floor, регистрация версии модели и
+  запись неизменяемых снимков предсказаний на test. `--dry-run` — без записи.
+  Подробности: `docs/BASELINE.md`.

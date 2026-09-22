@@ -72,6 +72,29 @@ def majority_class_accuracy(y_true: Sequence[int]) -> float:
     return max(ones, len(y_true) - ones) / len(y_true)
 
 
+def brier_score(y_true: Sequence[int], y_prob: Sequence[float]) -> float:
+    """Среднеквадратичная ошибка вероятности: mean((p - y)^2). Пусто — `nan`."""
+    if not y_true:
+        return math.nan
+    if len(y_true) != len(y_prob):
+        raise ValueError("y_true и y_prob разной длины")
+    total = sum(
+        (prob - target) ** 2 for target, prob in zip(y_true, y_prob, strict=True)
+    )
+    return total / len(y_true)
+
+
+def uniform_log_loss(n: int) -> float:
+    """Log loss «ничего не знаю»: p = 0.5 для всех. Равен ln 2 ~ 0.6931.
+
+    Удобная ссылка-ориентир: любая модель, у которой log_loss хуже этого,
+    добавляет отрицательную информацию.
+    """
+    if n <= 0:
+        return math.nan
+    return math.log(2.0)
+
+
 def grouped_bootstrap_interval(
     y_true: Sequence[int],
     y_prob: Sequence[float],
