@@ -24,8 +24,9 @@
 |---|---|
 | `Proposed` | предложено; ни решения, ни работы, ни артефактов |
 | `Planned` | запланировано к реализации; работы не начаты |
+| `Done` | выполнено и принято; в строке статуса указаны дата, коммит/мерж и артефакты в репозитории |
 
-Оба статуса означают «не сделано». Никаких `Done` в документе нет.
+`Proposed` и `Planned` означают «не сделано». `Done` ставится **только по факту**: артефакты в репозитории и мерж в `main`.
 
 ### Легенда приоритетов
 
@@ -175,7 +176,7 @@
 - **EPIC:** 00 — Product specification
 - **STAGE:** MVP-FIRST10
 - **PRIORITY:** P0
-- **STATUS:** Proposed
+- **STATUS:** **Done** (2026-09-21; коммит `cc35c29`, мерж в `main`; артефакт — `docs/PRD.md`, статус «Утверждён владельцем (2026-09-21)»)
 - **GOAL:** Зафиксировать в одном согласованном документе: цель предсказания, что именно считается «первой картой», правила cutoff/временной семантики и перечень гейтов.
 - **CONTEXT:** Без однозначной цели рискуют разойтись все последующие эпики. Цель — победа Team A на первой карте предстоящей Series (conditional game played, before draft), НЕ series win. Team A — стабильный канонический ID, сторона неизвестна.
 - **INPUT:** `SOURCES.md`; §1 этого бэклога; неформальная цель проекта от владельца.
@@ -207,7 +208,7 @@
 - **EPIC:** 00 — Product specification
 - **STAGE:** MVP
 - **PRIORITY:** P1
-- **STATUS:** Proposed
+- **STATUS:** **Done** (2026-09-21; коммит `68d835c`, мерж `82f2696` в `main`; артефакт — `docs/PRD_TEMPORAL.md` (решение по варианту A); `ADR-001` и `ADR-005` — Accepted)
 - **GOAL:** Определить пять временных полей и правила снимков/immutability/маркировки ретроспективы.
 - **CONTEXT:** Различать `event_time`, `source_published_at`, `observed_at`, `available_at`, `ingested_at`; историческая оценка обязана называться `retrospective_reconstructed`.
 - **INPUT:** `PRD-001`; §1 (п.7–8).
@@ -330,7 +331,7 @@
 - **EPIC:** 02 — Data ingestion
 - **STAGE:** MVP-FIRST10
 - **PRIORITY:** P0
-- **STATUS:** Proposed
+- **STATUS:** **Done** (2026-09-21; коммит `b500df7`, мерж в `main`; артефакт — `docs/research/SRC_001_VERDICT.md`; вердикт гейта G-SRC — **случай B**: история OpenDota — PASS, легального бесплатного upcoming — no-go → работа в ретроспективном контуре)
 - **GOAL:** Провести ограниченный read-only аудит: глубина/полнота истории OpenDota, фактические квоты, и легальность/доступность/покрытие Liquipedia для upcoming.
 - **CONTEXT:** Это гейт G-SRC. Без него нельзя обещать upstream/upcoming. Прямой HTTP из песочницы заблокирован — метод фиксируется как в `SOURCES.md`. Credentials не выдумываются.
 - **INPUT:** `SOURCES.md` (§3.1, §3.4, §4, §7 U3/U4/U10/U13); `PRD-001`.
@@ -346,7 +347,7 @@
 - **EPIC:** 02 — Data ingestion
 - **STAGE:** MVP-FIRST10
 - **PRIORITY:** P0
-- **STATUS:** Planned
+- **STATUS:** **Done** (2026-09-21; ветка `ing-001`, мерж `2b578af` в `main`; реализация — `src/d2intel/ingestion/`, миграция `0002`, entrypoint — `scripts/ingest_opendota_once.py`; тесты — `tests/ingestion/`)
 - **GOAL:** Минимальный клиент OpenDota, сохраняющий сырые ответы без потерь и дублей.
 - **CONTEXT:** primary-источник истории. Нужны sync-once, пагинация, ограниченный retry, учёт квот, идемпотентность записи raw.
 - **INPUT:** `SRC-001`, `DB-001`.
@@ -478,7 +479,7 @@
 - **EPIC:** 03 — Database
 - **STAGE:** MVP-FIRST10
 - **PRIORITY:** P0
-- **STATUS:** Planned
+- **STATUS:** **Done** (2026-09-21; коммит `534e559`, мерж в `main`; артефакты — миграция `alembic/versions/0001_initial_temporal_core.py`, `docs/SCHEMA.md`; тесты — `tests/test_constraints.py`, `tests/test_migrations.py`)
 - **GOAL:** Создать минимальную схему с temporal-полями, таблицами снимков и обязательными constraint'ами; **canonical — типизированные реляционные таблицы**, JSONB — только для raw/snapshot/variable payload.
 - **CONTEXT:** Схема сразу должна поддерживать `raw`, `canonical`, `snapshot` и пять временных полей; миграции — с первого дня. JSONB на canonical-слое **не** используется для основных полей.
 - **INPUT:** `INF-001`, `PRD-003`.
@@ -494,7 +495,7 @@
 - **EPIC:** 03 — Database
 - **STAGE:** MVP-FIRST10
 - **PRIORITY:** P0
-- **STATUS:** Planned
+- **STATUS:** **Done** (2026-09-21; ветка `data-001`, мерж `c96df17` в `main`; реализация — `src/d2intel/normalize/`, миграция `0003`, правила — `docs/NORMALIZATION.md`, entrypoint — `scripts/normalize_once.py`; тесты — `tests/normalize/`)
 - **GOAL:** Нормализовать исторические игры/команды/игроков/серии, построить map index и participant stats, с карантином неоднозначного map1.
 - **CONTEXT:** Нужен стабильный map index и разделение серий/карт; всё с провенансом на raw и сохранением свидетельств ростера.
 - **INPUT:** `ING-001`.
