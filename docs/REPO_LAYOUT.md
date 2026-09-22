@@ -21,41 +21,46 @@ ingestion/storage/features/models/api/frontend/docs») **документом**,
 
 - Future-слои (`experts/`, `live/`, `market/`, `backtest/`, `frontend/`) появятся только **после
   прохождения своих гейтов** (`G-LIVE`, `G-HM`, `G-MARKET`, `UI-001`) и только с кодом внутри.
-- Миграции схемы БД пишет `DB-001`; до неё `alembic/versions/` **намеренно пуст**.
+- Миграции `0001`–`0003` реализованы задачами `DB-001`, `ING-001`, `DATA-001`; следующие версии добавляются только в назначенном scope.
 - Модуль считается существующим, когда в нём есть импортируемый модуль и тест, а не когда
   создана папка.
 
 ---
 
-## 2. Текущая структура (после `INF-001`)
+## 2. Реализованная структура (после `DATA-001`, сверено 2026-09-22)
+
+Вход для нового агента — корневой `AGENTS.md`; актуальное состояние — `HANDOFF_PROMPT.md`; Git и локальный запуск — `REPO_SETUP.md`.
 
 ```text
 d2intel/
   README.md  PRODUCT.md  ARCHITECTURE.md  DATA_MODEL.md
   FEATURES.md  ML.md  EXPERT_ENGINE.md  LIVE.md  BACKTEST.md
   SOURCES.md  BACKLOG.md  FIRST_10_TASKS.md  REPO_SETUP.md
-  AGENT_INF001.md  AGENT_ING001.md          # пакеты задач для агентов-исполнителей
-  .env.example                              # дефолты, секретов нет
-  .github/workflows/ci.yml                  # ruff + mypy + pytest, postgres как service
-  docker-compose.yml                        # локальный PostgreSQL 17.4, порт только 127.0.0.1
-  pyproject.toml                            # конфиги ruff/mypy/pytest; зависимости — в requirements.txt
-  requirements.txt  requirements-dev.txt    # pinned
-  alembic.ini  alembic/                     # инфраструктура миграций; версий пока нет (DB-001)
-  scripts/                                  # одноразовые entrypoints
-  src/d2intel/                              # пакет приложения (см. §3)
+  AGENTS.md  HANDOFF_PROMPT.md             # правила и актуальное состояние
+  AGENT_INF001.md  AGENT_ING001.md          # архивы выполненных задач
+  .env.example                             # только локальные дефолты
+  .github/workflows/ci.yml                  # ruff + mypy + pytest, не деплой
+  docker-compose.yml                       # PostgreSQL 17.4 для новой Docker-среды
+  pyproject.toml                           # конфиги ruff/mypy/pytest
+  requirements.txt  requirements-dev.txt   # pinned
+  alembic.ini  alembic/versions/            # миграции 0001, 0002, 0003
+  scripts/                                 # healthcheck, ingest_once, normalize_once
+  src/d2intel/
     __init__.py  app.py  config.py  db.py
     api/
       __init__.py  health.py
+    ingestion/                             # OpenDota и raw capture
+    normalize/                             # canonical normalization
   tests/
-    test_smoke.py
+    test_smoke.py  test_migrations.py  test_constraints.py
+    ingestion/  normalize/
   docs/
     REPO_LAYOUT.md        # этот файл
     research/             # SRC-001, карты API
     agent/                # формат делегирования
 ```
 
-Доменной логики (ingestion / normalization / features / models / prediction) в `src/` **нет** —
-это задачи `DB-001`, `ING-001`, `DATA-001`, `FEAT-001`, `ML-001`.
+Реализованы `src/d2intel/ingestion/` и `src/d2intel/normalize/` (именно `normalize`, не `normalization`), миграции `0001`–`0003`, тесты ingestion/normalize/constraints/migrations. Feature/model/prediction-модулей ещё нет — это последующие назначаемые задачи.
 
 ---
 
@@ -68,7 +73,8 @@ d2intel/
 src/d2intel/
   config.py  db.py  app.py                  # инфраструктура
   api/                                      # HTTP-слой
-  ingestion/  normalization/  features/     # появятся в ING-001 / DATA-001 / FEAT-001
+  ingestion/  normalize/                    # реализованы ING-001 / DATA-001
+  features/                                 # появится в FEAT-001
   models/  prediction/                      # появятся в ML-001 / API-001
 ```
 
@@ -87,7 +93,7 @@ src/d2intel/
 | Каталог | Задача-владелец | Гейт |
 |---|---|---|
 | `src/d2intel/ingestion/` | `ING-001` и далее | `G-SRC` пройден |
-| `src/d2intel/normalization/` | `DATA-001` | — |
+| `src/d2intel/normalize/` | `DATA-001` (реализовано) | — |
 | `src/d2intel/features/` | `FEAT-001` | — |
 | `src/d2intel/models/` | `ML-001` | `G-MODEL` |
 | `src/d2intel/prediction/` | `API-001` | — |
