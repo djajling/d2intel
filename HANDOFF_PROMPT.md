@@ -20,17 +20,31 @@ Dota Esports Intelligence Platform — solo-founder проект: автомат
 
 Спецификация утверждена и ядро реализовано (всё 2026-09-21): product spec v0 (`docs/PRD.md`), временная семантика (`docs/PRD_TEMPORAL.md`, `ADR-001`/`ADR-005` — Accepted), аудит источников (`SRC-001` — случай B: история OpenDota PASS, upcoming no-go, работаем в ретроспективном контуре), скелет репозитория + CI (`INF-001`), temporal-схема БД, миграция `0001` (`DB-001`), OpenDota-клиент + raw capture, миграция `0002` (`ING-001`), нормализация исторического ядра, миграция `0003` (`DATA-001`). Код — в `src/d2intel/`, тесты — в `tests/`. Локальный запуск ядра выполнен 2026-09-22; факты и ограничения ниже.
 
-### Решения владельца и выполненный scope (2026-09-22)
+### Выполнено: FEAT-001 — prior-form датасет as-of для map1 (2026-09-22)
+
+- **Scope:** реализован feature-слой — `src/d2intel/features/prior_form.py` (модуль), `tests/features/` (unit + интеграция), `docs/FEATURE_DATASET.md` (контракт датасета). Схема БД, миграции и зависимости не менялись.
+- **Отклонение от карточки:** `FILES EXPECTED TO CHANGE` указывал `src/features/prior_form.py`; фактически модуль лежит в package `src/d2intel/features/` (layout репозитория — код в `src/d2intel/`, как у `ING-001`/`DATA-001`). Смысл и состав не изменены — отклонение только в пути, аналогично `DB-001`/`docs/SCHEMA.md` §1.
+- **Параллельная работа:** одновременно шёл ingestion другим агентом. Каждый работал в собственном клоне; БД, процесс и миграции со стороны FEAT-001 не менялись. Код опубликован **в ветке `feat/FEAT-001-prior-form`** (не в `main`) — по правилу параллельной работы; интеграцию в `main` выполняет ответственный за интеграцию.
+- **Проверки:**
+  - `ruff check src tests scripts` — новых ошибок нет; остались **6 исходных UP038** (`normalize/payloads.py:107,164`, `normalize/pipeline.py:716,726,737`, `normalize/writers.py:59`).
+  - `mypy src` — новых ошибок нет; остались **4 исходных union-attr** (`normalize/pipeline.py:144,149,150,151`).
+  - `pytest` безопасного набора + `tests/features/` — **154 passed** (134 прежних + 20 новых), 1 сторонний DeprecationWarning.
+  - Интеграционные тесты FEAT-001 выполнились на выделенной тестовой БД `d2intel_test` неразрушающе (rollback транзакции); `downgrade base` не выполнялся.
+  - Сборка на реальных данных (read-only SELECT по рабочей БД): 3455 примеров, все `train_eligible`; team-покрытие ≈ 0.84/0.81; `days_since_last` min = 4 часа — граница `result_lag` работает, утечек в признаки нет; `y` ≈ 0.53. Player-признаки на этом срезе отсутствовали (`game_participant` пуст на момент проверки) — отработал availability-aware fallback (маски `False`, значения `NaN`).
+- **Не сделано и не заявляется:** полный `pytest` с миграционными тестами не выполнялся (они деструктивны для общей тестовой БД при параллельной работе); CI коммита не подтверждён; метрик качества нет (это `ML-001`); immutable snapshot в `feature_snapshot` не пишется (это `API-001`).
+- **Runtime-код приложения не менялся** — перезапуск API не требуется.
+
+### Предыдущий пакет (2026-09-22): handoff + локальный запуск
 
 - Контекст сохраняется в репозитории, чтобы следующий агент работал без истории чатов.
 - Деплой означает push **и запуск приложения**; цель — компьютер владельца, Windows, не облако.
-- Для этого пакета согласован прямой push в `main`. Продуктовый код, схему и зависимости не меняли; `FEAT-001` не начинали.
+- Для того пакета был согласован прямой push в `main`. Продуктовый код, схему и зависимости не меняли.
 - Добавлен `AGENTS.md`; актуализированы README, этот handoff, `REPO_SETUP.md`, стартовая инструкция и layout; старые handoff-пакеты помечены архивными.
 
 ### Подтверждённое состояние запуска
 
-- Runtime-код: исходный commit `8867df1` (дальнейшие изменения этого пакета — только документация). SHA пакета документации смотреть в `git log`/`origin/main`.
-- Windows, Python `3.12.2`, зависимости из `requirements.txt`/`requirements-dev.txt` установлены в `.venv`, пакет установлен editable. CI использует Python `3.11`; результаты окружений не отождествлять.
+- Runtime-код: commit `8867df1`. SHA пакетов смотреть в `git log`/`origin`.
+- Windows, Python `3.12.2`, зависимости из `requirements.txt`/`requirements-dev.txt` установлены в `.venv`, пакет установлен editable. CI использует Python `3.11`; результаты окружений не отождествлять. **Внимание:** pinned-зависимости (`pandas==2.2.3` и др.) не имеют wheels для Python 3.13+ — venv нужно создавать на 3.11/3.12, иначе pip пытается собирать из исходников и падает (нет VS build tools).
 - Уже существовал PostgreSQL `17.10`, доступна БД `d2intel` на loopback, схема `0003`. Docker в PATH отсутствует и для этой существующей БД не нужен. Compose для новой среды описывает PostgreSQL `17.4`, это не версия текущей локальной службы.
 - Запущен `python -m uvicorn d2intel.app:app --host 127.0.0.1 --port 8000` без reload. Реальный запрос `http://127.0.0.1:8000/health` вернул `200`, `status: ok`, `database: up`.
 - На момент проверки `raw_payload`, `game`, `prediction` пусты. Никакой ingestion, нормализации или обучения в этой сессии не запускали; данные БД и миграции не меняли.
@@ -38,17 +52,12 @@ Dota Esports Intelligence Platform — solo-founder проект: автомат
 
 ### Проверки и открытые блокеры
 
-- Установка зависимостей и editable-пакета — успешно.
-- Безопасный набор: `pytest tests/test_smoke.py tests/ingestion/test_client.py tests/ingestion/test_contracts.py tests/ingestion/test_quota.py tests/ingestion/test_retry.py tests/ingestion/test_validation.py tests/normalize/test_identity.py tests/normalize/test_map_index.py` — **134 passed, 1 warning** (DeprecationWarning стороннего TestClient).
-- `ruff check src tests scripts` — **6 исходных ошибок UP038**: `normalize/payloads.py:107,164`, `normalize/pipeline.py:716,726,737`, `normalize/writers.py:59`.
-- `mypy src` — **4 исходных ошибки union-attr**: `normalize/pipeline.py:144,149,150,151`, возможный `None` у `PatchEntry`. Не исправлены в документальном scope.
-- Полный `pytest`, миграционные и DB-write тесты **не выполнялись**: текущая задача не разрешает очищать существующую тестовую БД, отдельную одноразовую БД не создавали (у роли нет CREATEDB). Smoke ограничен чтением БД. Зелёный полный test suite не заявляется.
-- Результат GitHub Actions этого коммита не подтверждён. Есть известные lint/type проблемы исходного кода; опубликованная документация не означает исправленный CI.
-- Следующий инфраструктурный шаг: отдельная согласованная задача на lint/type и полный suite в изолированной тестовой БД; при необходимости — согласовать постоянную Windows-службу. Успешный health ядра не закрывает `DEP-001`/`DEP-002` и не делает MVP готовым.
+- Установка зависимостей и editable-пакета — успешно (Python 3.11.9 в новом клоне; в новом окружении safe-набор + `tests/features/` = **154 passed**).
+- Следующий инфраструктурный шаг: отдельная согласованная задача на lint/type (6 `UP038` + 4 union-attr) и полный suite в изолированной тестовой БД; при необходимости — согласовать постоянную Windows-службу. Успешный health ядра не закрывает `DEP-001`/`DEP-002` и не делает MVP готовым.
 
 - CURRENT EPIC: `EPIC 05 — Team intelligence`
-- CURRENT TASK: `FEAT-001` — минимальный prior-form датасет as-of для map1 (зависимость `DATA-001` выполнена)
-- NEXT ACTION: **только по явной команде владельца** на `FEAT-001`
+- CURRENT TASK: `ML-001` — Prior + Logistic Regression baseline (зависимость `FEAT-001` теперь выполнена)
+- NEXT ACTION: **только по явной команде владельца** на `ML-001`; до этого — интеграция ветки `feat/FEAT-001-prior-form` в `main` ответственным за интеграцию
 - После этого: **остановиться и ждать команды владельца**
 
 ## Продуктовые ориентиры и gates
@@ -84,6 +93,7 @@ Dota Esports Intelligence Platform — solo-founder проект: автомат
 - `AGENTS.md` — действующие правила работы; `REPO_SETUP.md` — Git и локальный запуск.
 - `HANDOFF.md` — историческая консолидированная копия (Part 1–13), не обновляется как текущий статус.
 - `PRODUCT.md`, `ARCHITECTURE.md`, `DATA_MODEL.md`, `FEATURES.md`, `ML.md`, `EXPERT_ENGINE.md`, `LIVE.md`, `BACKTEST.md` — архитектура по слоям.
+- `docs/FEATURE_DATASET.md` — контракт prior-form датасета (`FEAT-001`).
 - `SOURCES.md` — исследование источников и сравнение reference-проектов (включая NUKI1223/dota-predictor и amarcu/dota-predictor).
 - `BACKLOG.md` — 90 задач по 23 эпикам (00–22) с зависимостями, acceptance criteria и DoD.
 - `FIRST_10_TASKS.md` — первые ровно 10 задач.

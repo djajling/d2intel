@@ -631,7 +631,7 @@
 - **EPIC:** 05 — Team intelligence
 - **STAGE:** MVP-FIRST10
 - **PRIORITY:** P1
-- **STATUS:** Planned
+- **STATUS:** Done (2026-09-22; код в ветке `feat/FEAT-001-prior-form` до интеграции в `main`)
 - **GOAL:** Собрать минимальный датасет признаков «форма/приоры» на момент до матча для первой карты — **включая минимальные Team- и Player-prior-form**, необходимые для baseline прототипа.
 - **CONTEXT:** Нужны coverage masks и различение режимов event vs observed (что было известно до cutoff против того, что наблюдалось позже). **В first10 минимальный player prior-form входит сюда**; расширенные player-агрегаты (EPIC 06) — уже MVP2-надстройка, а не предусловие первого прототипа.
 - **INPUT:** `DATA-001`.
@@ -642,6 +642,7 @@
 - **FILES EXPECTED TO CHANGE:** `src/features/prior_form.py`, `docs/FEATURE_DATASET.md`, `tests/features/test_prior_form.py`.
 - **RISKS:** Утечка через агрегаты, посчитанные на всём датасете; смешение режимов; несколько примеров на серию.
 - **DEFINITION OF DONE (task-specific):** Датасет строится as-of на реальных данных, маски и режимы явные, все трансформации fit только на train, один пример на серию, тесты проходят.
+- **РЕЗУЛЬТАТ (2026-09-22):** реализовано в `src/d2intel/features/prior_form.py` (путь `src/features/…` из карточки приведён к фактическому layout-у пакета `src/d2intel/`, как у `ING-001`/`DATA-001` — без изменения смысла); контракт датасета — `docs/FEATURE_DATASET.md`; тесты — `tests/features/test_prior_form.py` (20 тестов: cutoff/leakage, маски, shrinkage, режимы, fit train-only, один пример на серию). Проверено на реальных данных read-only: 3455 примеров, team-покрытие ≈ 0.84/0.81, граница `result_lag` (4 ч) подтверждается `days_since_last` min. Подробности и ограничения — `HANDOFF_PROMPT.md`.
 
 ### TEAM-001 — Team strength/rating (Elo-like) as-of, fit train-only
 - **EPIC:** 05 — Team intelligence

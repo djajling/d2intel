@@ -2,7 +2,7 @@
 
 **Тип документа:** краткий навигационный документ. **Полные карточки задач находятся только в `BACKLOG.md`** — здесь они не дублируются.
 **Проект:** Dota Esports Intelligence Platform, solo-founder, только бесплатные источники, личный инструмент.
-**Статус:** 6 из 10 задач выполнены и приняты (все 2026-09-21): `PRD-001`, `SRC-001`, `INF-001`, `DB-001`, `ING-001`, `DATA-001` — см. карточки в `BACKLOG.md`. Оставшиеся 4 (`FEAT-001`, `ML-001`, `API-001`, `UI-001`) — `Planned`. Документ не является разрешением на исполнение: запуск следующей задачи — только по явной команде владельца.
+**Статус:** 7 из 10 задач выполнены: `PRD-001`, `SRC-001`, `INF-001`, `DB-001`, `ING-001`, `DATA-001` (2026-09-21) и `FEAT-001` (2026-09-22, код в ветке `feat/FEAT-001-prior-form` до интеграции). Оставшиеся 3 (`ML-001`, `API-001`, `UI-001`) — `Planned`. Документ не является разрешением на исполнение: запуск следующей задачи — только по явной команде владельца.
 **Основание:** `SOURCES.md`, `BACKLOG.md`.
 **Смысл первых 10:** они дают **вертикальный РЕТРОСПЕКТИВНЫЙ прототип** (raw → нормализация → фичи as-of → baseline LR → immutable snapshot → простой локальный UI на реальной held-out исторической game1). Это **НЕ полноценный pre-match MVP**.
 
@@ -18,7 +18,7 @@
 | 4 | `DB-001` | Минимальная ядровая temporal-схема + snapshots / migrations / constraints | 03 — Database | P0 | **Done** | `INF-001` |
 | 5 | `ING-001` | OpenDota клиент + raw capture: sync-once, pagination, retry, quota, idempotence | 02 — Data ingestion | P0 | **Done** | `SRC-001`, `DB-001` |
 | 6 | `DATA-001` | Нормализация исторических games / team / player / series, map index, participant stats, evidence roster versions, patch; карантин неоднозначного map1 | 03 — Database | P0 | **Done** | `ING-001` |
-| 7 | `FEAT-001` | Минимальный prior-form датасет as-of для map1, **включая минимальные Team- и Player-prior-form**; coverage masks; режимы event vs observed | 05 — Team intelligence | P1 | Planned | `DATA-001` |
+| 7 | `FEAT-001` | Минимальный prior-form датасет as-of для map1, **включая минимальные Team- и Player-prior-form**; coverage masks; режимы event vs observed | 05 — Team intelligence | P1 | **Done** | `DATA-001` |
 | 8 | `ML-001` | Prior + Logistic Regression baseline: temporal group split, frozen heldout, Brier/logloss; research only, **CatBoost ещё нет** | 10 — Baseline ML | P1 | Planned | `FEAT-001` |
 | 9 | `API-001` | Prediction service: immutable snapshots + API + шаблонное evidence; enforcement меток historical vs real future; цель — только game1 | 12 — Prediction API | P1 | Planned | `ML-001`, `DB-001` |
 | 10 | `UI-001` | Простая локальная страница матча на реальной held-out исторической game1; явно ретроспектива (не «живой» прогноз); provenance / модель / версия / причины | 13 — Frontend MVP | P1 | Planned | `API-001` |
@@ -34,7 +34,7 @@
 ## 2. Текущий статус и точка решения
 
 - **Текущий эпик:** `EPIC 05 — Team intelligence`.
-- **Текущая задача:** `FEAT-001` — минимальный prior-form датасет as-of для map1 (статус `Planned`, приоритет `P1`; зависимости `DATA-001` — выполнена).
+- **Текущая задача:** `ML-001` — Prior + Logistic Regression baseline (зависимость `FEAT-001` теперь выполнена; статус `Planned`).
 - **Что уже сделано (по факту, всё 2026-09-21; детали и артефакты — в карточках `BACKLOG.md`):**
   - `PRD-001` — product spec v0 утверждена владельцем (`docs/PRD.md`): цель, первая карта, правила cutoff, гейты, non-goals.
   - `PRD-003` — временная семантика и снимки (`docs/PRD_TEMPORAL.md`, вариант A); `ADR-001` и `ADR-005` — Accepted.
@@ -43,8 +43,9 @@
   - `DB-001` — ядровая temporal-схема, миграция `0001`, constraint-тесты.
   - `ING-001` — OpenDota-клиент + raw capture, миграция `0002` (`src/d2intel/ingestion/`, `scripts/ingest_opendota_once.py`).
   - `DATA-001` — нормализация исторического ядра, миграция `0003`, карантин неоднозначного map1 (`src/d2intel/normalize/`, `scripts/normalize_once.py`).
-- **Следующее действие:** `FEAT-001` — только **после явной команды владельца**.
-- **Далее: STOP.** Без команды владельца никакие задачи, включая `FEAT-001` и последующие, не начинаются. Ничего не запускается, не конфигурируется и не выполняется.
+  - `FEAT-001` (2026-09-22) — prior-form датасет as-of для map1: Team/Player priors, coverage masks, режимы `event_asof`/`observed_mode_only_study` (`src/d2intel/features/prior_form.py`, контракт — `docs/FEATURE_DATASET.md`).
+- **Следующее действие:** `ML-001` — только **после явной команды владельца** (до этого — интеграция ветки `feat/FEAT-001-prior-form` в `main`).
+- **Далее: STOP.** Без команды владельца никакие задачи, включая `ML-001` и последующие, не начинаются. Ничего не запускается, не конфигурируется и не выполняется.
 
 ---
 
