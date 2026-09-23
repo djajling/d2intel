@@ -70,13 +70,23 @@ Dota Esports Intelligence Platform — solo-founder проект: автомат
 
 ### Проверки и открытые блокеры
 
-- Установка зависимостей и editable-пакета — успешно (Python 3.11.9 в новом клоне; в новом окружении safe-набор + `tests/features/` = **154 passed**).
+- Установка зависимостей и editable-пакета — успешно (Python 3.11.9 в новом клоне; безопасный набор + `tests/features/` + `tests/evaluation/` + `tests/models/` на объединённом `main` — exit 0).
 - Следующий инфраструктурный шаг: отдельная согласованная задача на lint/type (6 `UP038` + 4 union-attr) и полный suite в изолированной тестовой БД; при необходимости — согласовать постоянную Windows-службу. Успешный health ядра не закрывает `DEP-001`/`DEP-002` и не делает MVP готовым.
 
-- CURRENT EPIC: `EPIC 05 — Team intelligence` / `EPIC 02 — Data ingestion`
-- CURRENT TASK: match-detail backfill продолжается дневными батчами (3 907/16 063 ≈ 24%; player-признаки уже включены и проверены); следующий шаг — `ML-001` (LR-половина ждёт FEAT-001 — готово)
-- NEXT ACTION: **интеграция веток в `main` (решение владельца)** — `feat/FEAT-001-prior-form` (включает match-detail ingest), `origin/lead-patch-seed` (evaluation+models, base = актуальный main); `origin/feat/first-intelligence-dashboard` — только после ребейза со старого base `cc35c29`
-- Параллельный агент: `origin/lead-patch-seed` (base = актуальный `main`, +3233 строк: `evaluation/`, `models/`, ADR-006, frozen split, prior baseline; ML-001 наполовину — LR ждёт FEAT-001). Пересечение с моими ветками — только `BACKLOG.md`. `origin/feat/first-intelligence-dashboard` — **старый base** (`cc35c29`), мержить только после ребейза.
+### Интеграция в `main` выполнена (2026-09-23)
+
+Три ветки слиты в `main` (remote HEAD `bb89e39`), конфликтов не было:
+
+1. `a2b6329` — `feat/FEAT-001-prior-form`: feature-слой + match-detail ingestion (раннер, расслабленный валидатор) + скрипт сборки датасета.
+2. `084d926` — `origin/lead-patch-seed`: evaluation harness (`evaluation/`), models layer (`models/`), ADR-006, frozen split, prior baseline.
+3. `bb89e39` — `origin/feat/first-intelligence-dashboard`: статический дашборд в `site/` (мокап, не API-интегрирован; base был старый `cc35c29`, но git свёл автоматические слияния чисто).
+
+**Проверки на объединённом `main`:** `pytest` безопасного набора (без деструктивных `test_migrations`/`test_constraints`) — exit 0; `ruff` — 6 старых `UP038` (`normalize/payloads.py:107,164`, `normalize/pipeline.py:716,726,737`, `normalize/writers.py:59`); `mypy src` — 4 старых union-attr (`normalize/pipeline.py:144,149,150,151`). Новых ошибок интеграция не принесла; все 34 тестовых файла и 32 модуля на месте. Рабочая БД не менялась (схема `0003`), runtime-код приложения не перезапускался.
+
+- CURRENT EPIC: `EPIC 05 — Team intelligence` / `EPIC 10 — Baseline ML`
+- CURRENT TASK: `ML-001` — LR-половина: теперь все зависимости в `main` (FEAT-001 features + evaluation/models harness + frozen heldout). Prior-часть выполнена другим агентом (test accuracy 0.5191 vs floor 0.5191, порог 0.70 не достигнут).
+- NEXT ACTION: **только по явной команде владельца** на `ML-001` (LR); параллельно может продолжаться match-detail backfill дневными батчами (3 907/16 063 ≈ 24%).
+- Деплой: push выполнен; перезапуск локального API — по желанию владельца (runtime-код не менялся, можно не перезапускать).
 - После этого: **остановиться и ждать команды владельца**
 
 ## Продуктовые ориентиры и gates
