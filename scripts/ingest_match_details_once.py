@@ -86,6 +86,41 @@ WATERMARK_KEY = "watermark_match_id"
 MINUTE_WAIT_MARGIN_SECONDS = 5.0
 MAX_MINUTE_WAITS = 40
 
+# Прогон, не завершившийся за час, гарантированно мёртв (процесс убили,
+# сессия оборвалась). Свежие 'running' не трогаем — это может быть идущий
+# прямо сейчас прогон другого процесса.
+STALE_RUN_AGE_SECONDS = 3600
+
+
+def close_stale_runs(
+    *, session: Session, capture: RawCapture, source_id: str
+) -> list[str]:
+    """Закрывает зависшие 'running' прогоны как stale.
+
+    Возвращает id закрытых прогонов. Запуск нового прогона не должен оставлять
+    хвост из вечно «бегущих» записей — иначе покрытие источника невозможно
+    оценить (статус врёт).
+    """
+    rows = session.execute(
+        text(
+            """
+            SELECT id FROM ingestion_run
+             WHERE source_id = :source_id AND status = 'running'
+               AND started_at < now() - make_interval(secs => :age_seconds)
+            ORDER BY started_at
+            """
+        ),
+        {"source_id": source_id, "age_seconds": STALE_RUN_AGE_SECONDS},
+    ).fetchall()
+    closed: list[str] = []
+    for row in rows:
+        run_id = str(row.id)
+        capture.mark_stale(
+            run_id, "run interrupted before finish; closed by a later runner start"
+        )
+        closed.append(run_id)
+    return closed
+
 
 def select_candidates(
     session: Session, *, watermark: int | None, limit: int
@@ -148,6 +183,9 @@ def run_match_details(
     """Один ограниченный прогон match-detail ingestion."""
     capture = RawCapture(session, client.contract)
     source_id = capture.ensure_data_source()
+    closed_stale = close_stale_runs(
+        session=session, capture=capture, source_id=source_id
+    )
     watermark_before = load_watermark(session, source_id)
     run_id = capture.start_run(
         cursor_before=str(watermark_before) if watermark_before is not None else None
@@ -239,6 +277,12 @@ def run_match_details(
                     f"usable={usable} not_found={not_found} watermark={watermark_after}",
                     flush=True,
                 )
+    except KeyboardInterrupt:
+        # Прерывание — не тишина: прогон закрывается явным статусом, чтобы
+        # покрытие источника оценивалось по правдивым данным, а не по
+        # навсегда «бегущей» записи.
+        status = STATUS_FAILED
+        error = "interrupted by user (KeyboardInterrupt)"
     finally:
         # Перецепленные клиенты закрываются при любом исходе цикла.
         for fresh in extra_clients:
@@ -268,6 +312,7 @@ def run_match_details(
     quota = client.quota.snapshot()
     return {
         "run_id": run_id,
+        "closed_stale_runs": closed_stale,
         "status": status,
         "candidates": len(candidates),
         "fetched": fetched,
