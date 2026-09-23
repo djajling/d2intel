@@ -32,8 +32,13 @@
 - [ADR-003: ML baseline](docs/adr/ADR-003-ml-baseline.md)
 - [ADR-004: temporal validation](docs/adr/ADR-004-temporal-validation.md)
 - [ADR-005: prediction snapshots](docs/adr/ADR-005-prediction-snapshots.md)
+- [ADR-006: цель прогноза и фаза расчёта](docs/adr/ADR-006-target-and-phase.md)
 
 `ADR-001` (database) и `ADR-005` (prediction snapshots) — **Accepted** (утверждены владельцем 2026-09-21, реализация — `DB-001`); `ADR-002`…`ADR-004` — Proposed. Product spec v0 (`docs/PRD.md`) и временная семантика (`docs/PRD_TEMPORAL.md`) утверждены владельцем. Внутренние task IDs ссылаются на BACKLOG.md; для выполненных задач пути FILES EXPECTED TO CHANGE соответствуют реально созданным файлам.
+
+**Открытое расхождение:** утверждённый `docs/PRD.md` задаёт цель «карта N после полного драфта»,
+а `PRODUCT.md`, `BACKLOG.md §1 п.6` и `FIRST_10_TASKS.md` — «первая карта до драфта». Выбор
+выносится на вердикт владельца в [ADR-006](docs/adr/ADR-006-target-and-phase.md).
 
 ## Главные выводы
 
