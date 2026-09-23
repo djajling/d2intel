@@ -46,8 +46,10 @@ Dota Esports Intelligence Platform — solo-founder проект: автомат
   - `src/d2intel/ingestion/validation.py` — расслаблен `validate_match_detail`: пустой `draft_timings` → note `empty_draft_timings`, запись сохраняется. Карантин остался для настоящих дефектов (нет `match_id`, нет `players`, невалидное время). `QuarantineReason.EMPTY_DRAFT_TIMINGS` оставлен определённым (не ломать фильтры по старому карантину).
   - `tests/ingestion/test_validation.py` — тест переписан под новую семантику.
   - `scripts/build_prior_form_dataset.py` — сборка датасета на реальных данных (read-only) + отчёт покрытия: `DatasetMeta`, баланс меток, NaN-покрытие значимых признаков, `days_since_last` min как sanity-check `result_lag`. Exit 3 + явный вердикт, если player-признаки полностью замаскированы.
-- **Проверки:** `ruff`/`mypy` — без новых ошибок (те же 6 `UP038` + 4 union-attr в `normalize/`); smoke-прогон 5 матчей + `normalize_once.py` → 30 игроков / 50 участников / 50 результатов / 50 ростеров; сборка датасета до enrichment — team-покрытие 83.5%/80.9%, player 0% (ожидаемо), `days_since_last` min = 4 часа.
-- **Backfill идёт дневными батчами** (согласовано с владельцем): 60/мин, 3000/день free-tier. Это внешний календарь — ~6 дней на все 16 063 карты. Никакой API-ключ не используется; `OPENDOTA_API_KEY` не задан.
+- **Проверки:** `ruff`/`mypy` — без новых ошибок (те же 6 `UP038` + 4 union-attr в `normalize/`); `pytest` безопасного набора (без деструктивных `test_migrations`/`test_constraints`) — **329 passed**, exit 0.
+- **Результат прогона 2026-09-23:** 3 907 match-detail наблюдений (из 16 063 канонических карт, ~24%), нормализация дала 39 070 участников / 2 286 игроков / 39 070 результатов / 39 070 свидетельств состава, карантин пуст. Источник дважды падал (HTTP 521/522, Cloudflare) — раннер останавливался с явным `failed`, после восстановления источника прогон продолжался с watermark без потерь и дублей.
+- **Проверка цели (главное):** сборка датасета после enrichment — `player_a_avail` **0 → 618**, `player_b_avail` 0 → 617, покрытие player-признаков 17.86–17.89% (командных 83.5%/80.9%), `days_since_last` min = 4 часа, `y` ≈ 0.53, `target_patch_known` 3455/3455. Player-признаки **больше не замаскированы**; покрытие ограничено долей backfill'а и будет расти по мере дневных батчей.
+- **Backfill идёт дневными батчами** (согласовано с владельцем): 60/мин, 3000/день free-tier. Это внешний календарь — ~6 дней на все 16 063 карты. Никакой API-ключ не используется; `OPENDOTA_API_KEY` не задан. На момент останова дневной остаток квоты — 2 738.
 - **Не сделано и не заявляется:** интеграция в `main` — **решение владельца**; полный `pytest` с миграционными тестами не выполнялся (деструктивны для общей БД).
 
 ### Предыдущий пакет (2026-09-22): handoff + локальный запуск
@@ -72,8 +74,8 @@ Dota Esports Intelligence Platform — solo-founder проект: автомат
 - Следующий инфраструктурный шаг: отдельная согласованная задача на lint/type (6 `UP038` + 4 union-attr) и полный suite в изолированной тестовой БД; при необходимости — согласовать постоянную Windows-службу. Успешный health ядра не закрывает `DEP-001`/`DEP-002` и не делает MVP готовым.
 
 - CURRENT EPIC: `EPIC 05 — Team intelligence` / `EPIC 02 — Data ingestion`
-- CURRENT TASK: match-detail backfill (дневными батчами, внешний календарь квоты); после — пересборка датасета и проверка player-признаков
-- NEXT ACTION: по завершении backfill — `scripts/normalize_once.py` + `scripts/build_prior_form_dataset.py`; затем **интеграция веток в `main` (решение владельца)** и задача `ML-001` (LR-половина ждёт FEAT-001 — уже готово на ветке)
+- CURRENT TASK: match-detail backfill продолжается дневными батчами (3 907/16 063 ≈ 24%; player-признаки уже включены и проверены); следующий шаг — `ML-001` (LR-половина ждёт FEAT-001 — готово)
+- NEXT ACTION: **интеграция веток в `main` (решение владельца)** — `feat/FEAT-001-prior-form` (включает match-detail ingest), `origin/lead-patch-seed` (evaluation+models, base = актуальный main); `origin/feat/first-intelligence-dashboard` — только после ребейза со старого base `cc35c29`
 - Параллельный агент: `origin/lead-patch-seed` (base = актуальный `main`, +3233 строк: `evaluation/`, `models/`, ADR-006, frozen split, prior baseline; ML-001 наполовину — LR ждёт FEAT-001). Пересечение с моими ветками — только `BACKLOG.md`. `origin/feat/first-intelligence-dashboard` — **старый base** (`cc35c29`), мержить только после ребейза.
 - После этого: **остановиться и ждать команды владельца**
 
