@@ -1,0 +1,206 @@
+# Прогон на реальном срезе — 2026-09-22
+
+Run manifest для первого реального наполнения БД. Никаких метрик качества модели
+здесь нет и быть не может: модель ещё не обучена.
+
+## Цель
+
+Получить реальный (не синтетический) исторический срез в canonical-слое, чтобы
+`FEAT-001` и последующие задачи имели данные. До прогона все таблицы были пусты
+(`alembic_version = 0003`, 0 строк во всех таблицах).
+
+## Окружение
+
+- Python 3.13.14; venv `~/.workbuddy-ai/binaries/python/envs/d2intel`
+- SQLAlchemy 2.0.54, alembic 1.20.0, psycopg 3.3.6, httpx 0.28.1, pandas 3.0.6,
+  scikit-learn 1.9.1, fastapi 0.141.1, pydantic 2.13.5, pytest 9.1.1, ruff 0.16.8, mypy 2.3.1
+- PostgreSQL 17.10, локально `127.0.0.1:5432`, БД `d2intel`
+- `DATABASE_URL=postgresql+psycopg://d2intel:d2intel_dev@127.0.0.1:5432/d2intel`
+
+## Шаг 1 — ingestion (ING-001)
+
+```bash
+python scripts/ingest_opendota_once.py --pages 10
+```
+
+| Поле | Значение |
+|---|---|
+| run_id | `eb278083-6316-4852-a330-0146c3e762ac` |
+| запросов | 10 (из 3000/день, 60/мин) |
+| endpoint | `/api/proMatches` |
+| records | 844 |
+| quarantined | 156 (причина `null_team_identity`) |
+| raw_inserted | 10 |
+| cursor_after | `8918779289` |
+| status | `partial` (есть карантин) |
+
+## Шаг 2 — нормализация (DATA-001)
+
+```bash
+python scripts/normalize_once.py
+```
+
+| Сущность | Создано |
+|---|---|
+| game | 844 |
+| game_team | 1688 |
+| series | 406 |
+| team | 187 |
+| tournament | 17 |
+| patch | 0 (справочник ещё не загружен) |
+
+Карантин: `incomplete_series` 412, `unknown_series_type` 36, `inconsistent_series_teams` 2.
+
+## Шаг 3 — справочник патчей
+
+```bash
+python scripts/ingest_patch_constants.py     # 1 запрос /api/constants/patch
+python scripts/normalize_once.py             # created_patches = 61
+```
+
+60 наблюдений записано, 1 запись в карантине (`id = 0`, патч 6.70 справочника).
+
+## Шаг 4 — дозаполнение `game.patch_id`
+
+```bash
+python scripts/backfill_game_patch.py
+```
+
+`candidates=844, resolved=844, unresolved=0, patch_id_null_after=0`.
+
+`patch_id` — **производный** атрибут (патч, действовавший в `event_time`), а не
+наблюдаемый факт, поэтому дозаполнение NULL не переписывает наблюдение. Семантика
+совпадает с `normalize.pipeline._resolve_patch`. Неизменяемые снимки не затронуты.
+
+## Профиль среза после первого прогона (844 карты)
+
+| Показатель | Значение |
+|---|---|
+| Диапазон дат игры | 2026-07-29 … 2026-09-22 (~8 недель) |
+| Всего карт | 844 |
+| `map_number = 1` (кандидаты в game1) | **162** |
+| `map_number IS NULL` (`map_index_unresolved`) | 450 |
+| `status = completed` / `map_index_unresolved` | 394 / 450 |
+| `result_type` | `played` — 844 |
+| Победитель известен | 844 (0 NULL) |
+| Команд | 187; с ≥5 карт — 88 |
+| Карт на команду (среднее) | 9.0 |
+
+## Расширение среза (второй прогон, 2026-09-22)
+
+162 карты game1 — слишком мало, чтобы измерять точность модели. Срез расширен
+продолжением пагинации `/api/proMatches` по курсору.
+
+| Прогон | Страниц | Записей | Карантин | Курсор |
+|---|---|---|---|---|
+| первый | 10 | 844 | 156 | `8918779289` |
+| второй | 60 | 5665 | 335 | `8762861981` |
+| третий | 60 | 5763 | 237 | `8659205402` |
+| четвёртый | 60 | 0 | 0 | без изменения — `QuotaExhaustedError` (минутная квота) |
+| пятый (через 70 с) | 45 | 4063 | 437 | `8578480059` |
+
+Минутная квота (60/мин) была исчерпана на четвёртом прогоне: клиент **остановился
+и поднял `QuotaExhaustedError`**, курсор не продвинулся, тихого фолбэка не было —
+это штатное поведение ING-001. Суммарно за день израсходовано ~176 запросов
+из 3000.
+
+Нормализация расширенного raw:
+
+| Сущность | Создано |
+|---|---|
+| game | 15 219 |
+| game_team | 30 438 |
+| series | 7 797 |
+| team | 1 239 |
+| tournament | 84 |
+
+Карантин: `incomplete_series` 7364, `unknown_series_type` 491,
+`series_count_exceeds_format` 28, `inconsistent_series_teams` 11.
+
+### Профиль после расширения
+
+| Показатель | Значение |
+|---|---|
+| Диапазон дат | **2025-11-27 … 2026-09-22** (~10 месяцев) |
+| Всего карт | 16 063 |
+| `status = completed` / `map_index_unresolved` | 7 719 / 8 344 |
+| Команд | 1 426 |
+| Серий | 8 203 |
+| **game1-когорта** | **3 455** |
+| train / valid / test | 3 212 / 110 / 131 |
+| Баланс меток | 0.514 |
+| **Нижний ориентир (константа)** | **0.514** |
+
+Итог: когорта выросла в 21 раз, test-сегмент — с 13 до 131 наблюдения.
+Метрику модели теперь **можно измерить**, но 70% по-прежнему означает +18.6 п.п.
+над константой 51.4% на pre-draft target без состава и драфта — см. ADR-006.
+
+## Чего в срезе НЕТ (важно для FEAT-001/ML-001)
+
+- **Игроки и ростеры**: `player`, `player_performance`, `roster_membership` пусты —
+  `/api/proMatches` не отдаёт состав. Нужен `/api/matches/{match_id}` (отдельная задача).
+- **Драфт**: `picks_bans` не загружались. Draft — стадия 2, до неё target считается
+  до драфта.
+- **История до окна**: срез охватывает ~10 месяцев, но у части команд (и у всех на
+  начале окна) наблюдений раньше cutoff мало или нет → признаки формы обязаны
+  отдавать `null`/маску, а не «0».
+
+## Шаг 5 — заморозка сплита (pre-registration ML-001)
+
+```bash
+python scripts/freeze_split.py
+```
+
+Записан манифест `docs/frozen_split_2026-09-22.json`:
+
+| Поле | Значение |
+|---|---|
+| `content_hash` | `eb4787083a560cd79246161414b24348cb80cd6ece98ade05ba8c91efa0f8ce0` |
+| train / valid / test / excluded | 3212 / 110 / 131 / 2 |
+| границы | valid_from 2026-06-24 19:33 (+03), test_from 2026-08-08 16:26 (+03) |
+| embargo | 24 h |
+
+Хэш покрывает спеку и отсортированные id серий и карт по сегментам. Любое
+дообучение внутри замороженного диапазона меняет хэш — и `run_prior_baseline.py`
+откажется работать (код 73), пока заморозка не будет явным образом обновлена.
+
+## Шаг 6 — первый baseline и первые предсказания
+
+```bash
+python scripts/run_prior_baseline.py docs/frozen_split_2026-09-22.json
+```
+
+| Поле | Значение |
+|---|---|
+| алгоритм | `prior_const` (`feature_schema_version = none.v1`) |
+| `p_a` | 0.5131 (частота побед Team A на train, `fitted_n = 3212`) |
+| `training_cutoff` | 2026-06-23 19:33 (+03) |
+| accuracy на test | 0.5191 |
+| log_loss на test | 0.6925 (reference ln 2 = 0.6931) |
+| Brier на test | 0.2497 |
+| bootstrap log_loss (95%, по сериям) | 0.6881 … 0.6969 |
+| порог ADR-006 | **not met** (0.5191 < 0.70) — ожидаемо, prior не кандидат на порог |
+
+Записано в БД: `model_version` 1, `prediction` 131, `prediction_snapshot` 131,
+`prediction_evaluation` 131. Перезапуск скрипта проверен — дублей нет
+(идемпотентность по `idempotency_key` и `run_key`). Подробности — `docs/BASELINE.md`.
+
+## Проверки
+
+- `ruff check .` → All checks passed
+- `mypy src` → Success, 34 source files; `mypy scripts` → Success, 8 source files
+- `pytest -q` → **324 passed**
+- `mypy tests` → **блокируется сторонним стабом**: `numpy/__init__.pyi:737
+  Type statement is only supported in Python 3.12 and greater` при
+  `[tool.mypy] python_version = "3.11"`. Воспроизводится на дереве до этого
+  коммита, то есть это не следствие текущих изменений. Рекомендация владельцу:
+  поднять `python_version` до `"3.12"` (в пределах `requires-python = ">=3.11"`),
+  если нужен тип-чек тестов.
+
+## Воспроизведение
+
+Прогон идемпотентен: повторный `normalize_once` не создаёт дублей, повторный
+`ingest_patch_constants` пишет то же наблюдение. Курсор `/api/proMatches`
+продвигается вперёд, поэтому следующий прогон продолжит с `8578480059`.
+Минутный лимит (60/мин) — реальный: на четвёртом прогоне клиент остановился
+с `QuotaExhaustedError`; между большими прогонами нужна пауза.

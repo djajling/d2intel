@@ -940,7 +940,7 @@
 - **EPIC:** 10 — Baseline ML
 - **STAGE:** MVP-FIRST10
 - **PRIORITY:** P1
-- **STATUS:** Planned
+- **STATUS:** In progress — протокол + frozen heldout + prior часть выполнены (2026-09-22, ветка `lead-patch-seed`): манифест заморозки `docs/frozen_split_2026-09-22.json`, `src/d2intel/models/` (registry, prior, repository), `docs/BASELINE.md`, первый baseline на реальных данных (test accuracy 0.5191 vs floor 0.5191). **LR-часть ждёт FEAT-001** — без признаков улучшать нечего.
 - **GOAL:** Построить baseline (prior + LR) с корректным временным групповым сплитом и замороженным heldout.
 - **CONTEXT:** Research-only на этом шаге: **CatBoost пока не используется**. Сплит по сериям с purge на пересечении.
 - **INPUT:** `FEAT-001`.
