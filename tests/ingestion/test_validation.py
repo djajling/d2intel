@@ -149,8 +149,12 @@ def test_picks_bans_invalid_team_is_quarantined() -> None:
     assert result.quarantined[0].reason_code == QuarantineReason.INVALID_RECORD_TYPE
 
 
-def test_match_detail_with_empty_draft_timings_is_quarantined() -> None:
-    """Пустой draft_timings — задокументированная особенность источника."""
+def test_match_detail_with_empty_draft_timings_is_recorded_with_note() -> None:
+    """Пустой draft_timings — особенность источника: запись сохраняется.
+
+    Карантин блокировал бы участников и статистику ради поля, которое для них
+    не нужно; отсутствие помечается note, а не терей данных.
+    """
     payload = {
         "match_id": 9009924057,
         "start_time": 1_790_006_825,
@@ -166,8 +170,9 @@ def test_match_detail_with_empty_draft_timings_is_quarantined() -> None:
     }
     result = validate_match_detail(payload, observed_at=OBSERVED_AT)
 
-    assert result.records == ()
-    assert result.quarantined[0].reason_code == QuarantineReason.EMPTY_DRAFT_TIMINGS
+    assert len(result.records) == 1
+    assert result.records[0].provider_entity_id == "9009924057"
+    assert result.quarantined == ()
     assert "empty_draft_timings" in result.notes
 
 
@@ -187,6 +192,7 @@ def test_match_detail_with_draft_timings_is_accepted() -> None:
     }
     result = validate_match_detail(payload, observed_at=OBSERVED_AT)
     assert len(result.records) == 1
+    assert result.notes == ()
 
 
 def test_patch_constants_are_validated() -> None:

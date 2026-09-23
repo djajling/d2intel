@@ -35,6 +35,9 @@ class QuarantineReason(StrEnum):
     INVALID_RECORD_TYPE = "invalid_record_type"
     SCHEMA_DRIFT = "schema_drift"
     IMPLAUSIBLE_EVENT_TIME = "implausible_event_time"
+    # Больше не порождается: пустой `draft_timings` — особенность источника,
+    # запись сохраняется с note (см. `validate_match_detail`). Значение
+    # оставлено, чтобы не ломать фильтры по старым данным карантина.
     EMPTY_DRAFT_TIMINGS = "empty_draft_timings"
 
 
@@ -413,8 +416,12 @@ def validate_match_detail(payload: Any, *, observed_at: datetime) -> ValidationR
     """Проверка `/api/matches/{id}`.
 
     Пустой `draft_timings` — задокументированная особенность источника
-    (OPENDOTA_API_MAP.md §2.2, §4.5): payload сохраняется как raw, но помечается
-    отдельной data-quality причиной `empty_draft_timings`.
+    (OPENDOTA_API_MAP.md §2.2, §4.5): draft-данные для карты недоступны.
+    Карантин в этом случае **не нужен**: участники, финальная статистика и
+    свидетельства состава от draft не зависят (draft — отдельная стадия,
+    `FEATURES.md` §5, MVP2). Факт отсутствия помечается note
+    `empty_draft_timings` — он виден в completeness-флагах наблюдения, а сам
+    draft не подменяется.
     """
     quarantine = _QuarantineFactory(observed_at=observed_at, provider_entity_type="match")
     if not isinstance(payload, Mapping):
@@ -466,20 +473,12 @@ def validate_match_detail(payload: Any, *, observed_at: datetime) -> ValidationR
             ),
         )
 
+    notes: list[str] = []
     draft_timings = payload.get("draft_timings")
     if isinstance(draft_timings, list) and not draft_timings:
-        return ValidationResult(
-            records=(),
-            quarantined=(
-                quarantine.make(
-                    payload,
-                    QuarantineReason.EMPTY_DRAFT_TIMINGS,
-                    "draft_timings пуст: draft-данные недоступны для этой карты",
-                    provider_entity_id=str(match_id),
-                ),
-            ),
-            notes=("empty_draft_timings",),
-        )
+        # Карантин записи целиком блокировал бы участников и статистику ради
+        # поля, которое для них не нужно. Note — честная разметка отсутствия.
+        notes.append("empty_draft_timings")
 
     return ValidationResult(
         records=(
@@ -492,6 +491,7 @@ def validate_match_detail(payload: Any, *, observed_at: datetime) -> ValidationR
             ),
         ),
         quarantined=(),
+        notes=tuple(notes),
     )
 
 

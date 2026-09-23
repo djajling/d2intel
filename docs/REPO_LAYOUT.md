@@ -60,7 +60,7 @@ d2intel/
     agent/                # формат делегирования
 ```
 
-Реализованы `src/d2intel/ingestion/` и `src/d2intel/normalize/` (именно `normalize`, не `normalization`), миграции `0001`–`0003`, тесты ingestion/normalize/constraints/migrations. Feature/model/prediction-модулей ещё нет — это последующие назначаемые задачи.
+Реализованы `src/d2intel/ingestion/` и `src/d2intel/normalize/` (именно `normalize`, не `normalization`), миграции `0001`–`0003`, тесты ingestion/normalize/constraints/migrations, а также feature-слой `src/d2intel/features/` (`FEAT-001`: prior-form датасет as-of для map1). Model/prediction-модулей ещё нет — это последующие назначаемые задачи.
 
 ---
 
@@ -74,7 +74,7 @@ src/d2intel/
   config.py  db.py  app.py                  # инфраструктура
   api/                                      # HTTP-слой
   ingestion/  normalize/                    # реализованы ING-001 / DATA-001
-  features/                                 # появится в FEAT-001
+  features/                                 # реализован FEAT-001 (prior_form)
   models/  prediction/                      # появятся в ML-001 / API-001
 ```
 
@@ -94,7 +94,7 @@ src/d2intel/
 |---|---|---|
 | `src/d2intel/ingestion/` | `ING-001` и далее | `G-SRC` пройден |
 | `src/d2intel/normalize/` | `DATA-001` (реализовано) | — |
-| `src/d2intel/features/` | `FEAT-001` | — |
+| `src/d2intel/features/` | `FEAT-001` (реализовано) | — |
 | `src/d2intel/models/` | `ML-001` | `G-MODEL` |
 | `src/d2intel/prediction/` | `API-001` | — |
 | `src/d2intel/experts/` | EPIC 14 | — |
