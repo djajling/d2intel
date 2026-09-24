@@ -940,7 +940,7 @@
 - **EPIC:** 10 — Baseline ML
 - **STAGE:** MVP-FIRST10
 - **PRIORITY:** P1
-- **STATUS:** In progress — протокол + frozen heldout + prior часть выполнены (2026-09-22, ветка `lead-patch-seed`): манифест заморозки `docs/frozen_split_2026-09-22.json`, `src/d2intel/models/` (registry, prior, repository), `docs/BASELINE.md`, первый baseline на реальных данных (test accuracy 0.5191 vs floor 0.5191). **LR-часть ждёт FEAT-001** — без признаков улучшать нечего.
+- **STATUS:** In progress → **обе части выполнены (2026-09-23)**. Prior: ветка `lead-patch-seed` (test accuracy 0.5191 vs floor 0.5191). LR: `scripts/run_lr_baseline.py` на prior-form дифференциалах — test accuracy **0.5649** (floor 0.5191), log_loss **0.6786** vs uniform 0.6931, brier 0.2429; `model_version` `logreg_prior_form` + 131 snapshot + 131 evaluation в БД. Порог ADR-006 (0.70) не достигнут — при n=131 CI точности ±8.5пп, поэтому статистически от floor почти неотличим; nonetheless LR — первый кандидат, несущий информацию (диапазон p_a 0.306–0.763 vs константа 0.5131). **Повышение до champion — отдельное решение владельца по итоговому гейту.**
 - **GOAL:** Построить baseline (prior + LR) с корректным временным групповым сплитом и замороженным heldout.
 - **CONTEXT:** Research-only на этом шаге: **CatBoost пока не используется**. Сплит по сериям с purge на пересечении.
 - **INPUT:** `FEAT-001`.

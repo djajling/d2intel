@@ -71,7 +71,7 @@ Dota Esports Intelligence Platform — solo-founder проект: автомат
 ### Проверки и открытые блокеры
 
 - Установка зависимостей и editable-пакета — успешно (Python 3.11.9 в новом клоне; безопасный набор + `tests/features/` + `tests/evaluation/` + `tests/models/` на объединённом `main` — exit 0).
-- Следующий инфраструктурный шаг: отдельная согласованная задача на lint/type (6 `UP038` + 4 union-attr) и полный suite в изолированной тестовой БД; при необходимости — согласовать постоянную Windows-службу. Успешный health ядра не закрывает `DEP-001`/`DEP-002` и не делает MVP готовым.
+- Следующий инфраструктурный шаг: отдельная согласованная задача на lint/type (6 `UP038` + 22 attr-defined/index в `build_prior_form_dataset.py` + 4 union-attr) и полный suite в изолированной тестовой БД; при необходимости — согласовать постоянную Windows-службу. Успешный health ядра не закрывает `DEP-001`/`DEP-002` и не делает MVP готовым.
 
 ### Интеграция в `main` выполнена (2026-09-23)
 
@@ -83,10 +83,50 @@ Dota Esports Intelligence Platform — solo-founder проект: автомат
 
 **Проверки на объединённом `main`:** `pytest` безопасного набора (без деструктивных `test_migrations`/`test_constraints`) — exit 0; `ruff` — 6 старых `UP038` (`normalize/payloads.py:107,164`, `normalize/pipeline.py:716,726,737`, `normalize/writers.py:59`); `mypy src` — 4 старых union-attr (`normalize/pipeline.py:144,149,150,151`). Новых ошибок интеграция не принесла; все 34 тестовых файла и 32 модуля на месте. Рабочая БД не менялась (схема `0003`), runtime-код приложения не перезапускался.
 
-- CURRENT EPIC: `EPIC 05 — Team intelligence` / `EPIC 10 — Baseline ML`
-- CURRENT TASK: `ML-001` — LR-половина: теперь все зависимости в `main` (FEAT-001 features + evaluation/models harness + frozen heldout). Prior-часть выполнена другим агентом (test accuracy 0.5191 vs floor 0.5191, порог 0.70 не достигнут).
-- NEXT ACTION: **только по явной команде владельца** на `ML-001` (LR); параллельно может продолжаться match-detail backfill дневными батчами (3 907/16 063 ≈ 24%).
-- Деплой: push выполнен; перезапуск локального API — по желанию владельца (runtime-код не менялся, можно не перезапускать).
+### ML-001 (LR) выполнен + аудит upcoming (2026-09-23)
+
+**LR-базлайн обучен и записан.** `scripts/run_lr_baseline.py` — Logistic
+Regression на prior-form дифференциалах (9 признаков), `C` подбирается
+**только на valid**, μ — `PriorFormParams.fit` на train до сборки датасета,
+предикты — на замороженном test. Результаты на frozen test (n=131):
+
+| Метрика | LR | floor / uniform |
+|---|---|---|
+| accuracy | **0.5649** | 0.5191 |
+| log_loss | **0.6786** | 0.6931 (uniform) |
+| brier | 0.2429 | — |
+| 95% CI log_loss | 0.6535 – 0.7034 | — |
+
+Порог ADR-006 (0.70) **не достигнут** — честно зафиксировано; при n=131
+CI точности ±8.5пп, поэтому 0.56 статистически от floor почти
+неотличим (см. расчёт порогов ниже). Зато LR — первый кандидат, который
+**несёт информацию**: log_loss лучше uniform, диапазон p_a
+0.306–0.763 против константы 0.5131 у prior. Записано в БД:
+`model_version` `logreg_prior_form` + 131 `prediction_snapshot` +
+131 `prediction_evaluation` (идемпотентно, повторный прогон не дублирует).
+
+**Аудит upcoming (`SRC_002`)** — `docs/research/SRC_002_UPCOMING_VERDICT.md`:
+вердикт B подтверждён. Бесплатного легального источника расписания нет
+(Liquipedia — нет schedule-эндпоинта, только POST-lookup по matchid;
+OpenDota — только история; STRATZ — Cloudflare 403 из облака; PandaScore —
+fixtures бесплатно, но исключён проектом + токен скомпрометирован).
+Live-тест на Wallachia возможен **только** как ручной prospective-прогон
+(владелец даёт фикстуру заранее, cutoff = now, `prospective_archived`).
+
+**Проверки:** `ruff src tests scripts` — 6 старых `UP038` (новых нет);
+`mypy src scripts` — 26 старых ошибок в `build_prior_form_dataset.py` и
+`normalize/pipeline.py` (новых нет); `pytest` безопасного набора —
+**334 passed** (11 новых тестов `tests/features/test_lr_baseline.py`).
+Рабочая БД: схема `0003`, добавлены строки `model_version`/
+`prediction_snapshot`/`prediction_evaluation` (миграций не было).
+Runtime-код приложения не менялся — перезапуск API не требуется.
+
+- CURRENT EPIC: `EPIC 10 — Baseline ML`
+- CURRENT TASK: `ML-001` — **выполнена целиком** (prior + LR). Осталось
+  повышение до champion — отдельное решение владельца по итоговому гейту.
+- NEXT ACTION: по команде владельца — `API-001` (prediction service) или
+  ручной prospective-прогон на конкретной фикстуре Wallachia. До аудита
+  upcoming-пайплайн не строим — нет источника.
 - После этого: **остановиться и ждать команды владельца**
 
 ## Продуктовые ориентиры и gates
