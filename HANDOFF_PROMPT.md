@@ -121,12 +121,45 @@ Live-тест на Wallachia возможен **только** как ручно
 `prediction_snapshot`/`prediction_evaluation` (миграций не было).
 Runtime-код приложения не менялся — перезапуск API не требуется.
 
-- CURRENT EPIC: `EPIC 10 — Baseline ML`
-- CURRENT TASK: `ML-001` — **выполнена целиком** (prior + LR). Осталось
-  повышение до champion — отдельное решение владельца по итоговому гейту.
-- NEXT ACTION: по команде владельца — `API-001` (prediction service) или
-  ручной prospective-прогон на конкретной фикстуре Wallachia. До аудита
-  upcoming-пайплайн не строим — нет источника.
+### API-001 выполнен (2026-09-23)
+
+Prediction service: `POST /predict/game/{game_id}` — только game1
+(`map_number = 1`), на каждый вызов новый immutable `prediction_snapshot`
+(новый `snapshot_seq`, а не перезапись), снимок несёт `model_version_id` +
+`feature_snapshot_id` + `cutoff_at`, режим `retrospective_reconstructed`,
+evidence — шаблонное с `template`-id (LLM нет), purity-проверка: независимый
+подсчёт карт, доступных к cutoff, и сверка с признаками (нарушение → 500,
+снимок не пишется).
+
+**Реальный запуск на компьютере владельца:** uvicorn поднят на `:8000`,
+`/health` → 200 `{"database":"up"}`; `/predict/game/{id}` на реальной
+игре → **200, p_a = 0.5489** (p_b 0.4511), покрытие Team A 191 / Team B 38
+игр, два последовательных вызова создали **разные** snapshot_id при той же
+цели — иммутабельность работает. После проверки сервер остановлен
+(фоновый процесс, не служба — автозапуск не настроен, `REPO_SETUP.md`).
+
+**Артефакт модели:** LR теперь сериализуется в `artifacts/models/*.joblib`
+(gitignored) с регистрацией `artifact_uri`/`artifact_hash` в
+`model_version`. Перерегистрирован под run-key `lr-inference-v1`
+(версия `0cd37646`) — старая версия `9399c7db` осталась кандидатом без
+артефакта (модель неизменяема, обновить нельзя, только новая версия).
+Также `PriorFormBuilder` научился фильтровать цели по `series_ids` —
+инференс одной серии больше не собирает весь датасет.
+
+**Проверки:** `ruff src tests scripts` — 6 старых `UP038` (новых нет);
+`mypy src scripts` — 26 старых ошибок в `build_prior_form_dataset.py` и
+`normalize/pipeline.py` (новых нет); `pytest` безопасного набора —
+**348 passed** (+14 `tests/api/test_predict.py`: immutability, отказ на
+не-game1, обязательные поля, метка retrospective, триггер БД, evidence).
+Схема БД не менялась. Runtime: сервер запускался и был остановлен.
+
+- CURRENT EPIC: `EPIC 12 — Prediction API`
+- CURRENT TASK: `API-001` — **выполнена**. `API-002` (FeatureSnapshot
+  builder как отдельный persist) частично перекрыт API-001 —
+  `feature_snapshot` уже пишется на инференсе.
+- NEXT ACTION: по команде владельца — `UI-001` (локальная страница матча с
+  провенансом) или ручной prospective-прогон на фикстуре Wallachia
+  (единственный законный live-тест, см. `SRC_002`).
 - После этого: **остановиться и ждать команды владельца**
 
 ## Продуктовые ориентиры и gates

@@ -206,6 +206,26 @@ def _impute(x: np.ndarray, fill_value: float = 0.0) -> np.ndarray:
     return np.nan_to_num(x, nan=fill_value, posinf=fill_value, neginf=fill_value)
 
 
+def _save_artifact(model: LogisticRegression, run_key: str) -> tuple[str, str]:
+    """Сериализовать обученную LR в artifacts/models для инференса (API-001).
+
+    Возвращает относительный путь (от `artifacts/models`) и sha256 артефакта.
+    Католог артифактов в .gitignore — тяжёлые файлы не идут в Git, путь
+    достаточно детерминирован, чтобы API его нашёл.
+    """
+    import hashlib
+
+    from joblib import dump as joblib_dump
+
+    artifacts_dir = Path("artifacts/models")
+    artifacts_dir.mkdir(parents=True, exist_ok=True)
+    file_name = f"{ALGORITHM}_{run_key[:12]}.joblib"
+    path = artifacts_dir / file_name
+    joblib_dump(model, path)
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    return file_name, digest
+
+
 def _fit_predict(
     train: pd.DataFrame,
     valid: pd.DataFrame,
@@ -351,6 +371,9 @@ def main(argv: list[str] | None = None) -> int:
         model_version_id = None
         if not args.dry_run:
             run_key = args.run_key or frozen.content_hash
+            # Сериализованный артефакт для инференса (API-001): joblib-файл
+            # в artifacts/models, путь и хэш — в model_version.
+            artifact_uri, artifact_hash = _save_artifact(model, run_key)
             model_version_id = register_model_version(
                 session,
                 algorithm=ALGORITHM,
@@ -360,8 +383,11 @@ def main(argv: list[str] | None = None) -> int:
                     "c": fit_report["chosen_c"],
                     "solver": "lbfgs",
                     "feature_columns": FEATURE_COLUMNS,
+                    "prior_mean": params.prior_mean,
                     "n_train": int(len(train)),
                 },
+                artifact_uri=artifact_uri,
+                artifact_hash=artifact_hash,
                 code_commit=_git_commit(),
                 run_key=run_key,
             )

@@ -1076,7 +1076,7 @@
 - **EPIC:** 12 — Prediction API
 - **STAGE:** MVP-FIRST10
 - **PRIORITY:** P1
-- **STATUS:** Planned
+- **STATUS:** In progress → **выполнено (2026-09-23)**. `src/d2intel/api/predict.py` (POST `/predict/game/{game_id}`) + `src/d2intel/api/snapshots.py` (immutable `prediction_snapshot` + `feature_snapshot` + шаблонное evidence). Только game1: не-map1 цель → 400; на каждый вызов — новый `snapshot_seq` (AC #1); снимок несёт model_version/feature_snapshot/cutoff (AC #3); режим `retrospective_reconstructed` (AC #4); evidence — шаблоны с `template`-id, без LLM (AC #5); purity-проверка: независимый подсчёт доступных к cutoff карт и сравнение с признаками (AC #6). Реальный HTTP-вызов на рабочей БД: 200, p_a 0.5489, покрытие 191/38 игр. Артефакт LR теперь сериализуется (`artifacts/models/*.joblib`, gitignored) и регистрируется в `model_version.artifact_uri` — перерегистрирован под run-key `lr-inference-v1` (версия `0cd37646`). Проверки: `ruff` — 6 старых `UP038`, `mypy` — 26 старых ошибок (новых нет), `pytest` безопасного набора — **348 passed** (+14 `tests/api/test_predict.py`).
 - **GOAL:** Сервис предсказания, который пишет immutable `Prediction`/`PredictionSnapshot`, отдаёт API и шаблонное evidence; цель — только game1.
 - **CONTEXT:** Снимки обязательны с первого прототипа. Историческая оценка маркируется `retrospective_reconstructed`.
 - **INPUT:** `ML-001`, `DB-001`.

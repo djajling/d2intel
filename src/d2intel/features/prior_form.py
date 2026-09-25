@@ -694,12 +694,14 @@ class PriorFormBuilder:
         params: PriorFormParams | None = None,
         *,
         evaluation_mode: str = EVENT_ASOF,
+        series_ids: set[UUID] | None = None,
     ) -> None:
         if evaluation_mode not in EVALUATION_MODES:
             raise ValueError(f"unsupported evaluation_mode: {evaluation_mode!r}")
         self._session = session
         self._params = params if params is not None else PriorFormParams()
         self._evaluation_mode = evaluation_mode
+        self._series_ids = series_ids
 
     @property
     def params(self) -> PriorFormParams:
@@ -712,8 +714,15 @@ class PriorFormBuilder:
         return self._evaluation_mode
 
     def build(self) -> tuple[pd.DataFrame, DatasetMeta]:
-        """Собрать датасет и метаданные. Столбцы — см. `_row_to_dict`."""
+        """Собрать датасет и метаданные. Столбцы — см. `_row_to_dict`.
+
+        С `series_ids` (инференс одной серии, API-001) цели ограничиваются
+        этой серией — собирать весь датасет ради одного предсказания
+        бессмысленно. История команд при этом та же: она нужна до cutoff.
+        """
         targets = fetch_targets(self._session)
+        if self._series_ids is not None:
+            targets = [t for t in targets if t.series_id in self._series_ids]
         prior_games = fetch_prior_games(self._session)
         participants = fetch_participants(self._session)
 
