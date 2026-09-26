@@ -956,7 +956,7 @@
 - **EPIC:** 10 — Baseline ML
 - **STAGE:** MVP
 - **PRIORITY:** P1
-- **STATUS:** Planned
+- **STATUS:** Done (2026-09-26; прогон по manifest `docs/ml/ML002_manifest.json` ревизия 2, зафиксирован ДО обучения по ADR-007; отчёт — `docs/CHALLENGER.md`, полный лог — `docs/ml/ML002_run_2026-09-26.json`). Выбор на valid (depth 3, lr 0.03), untouched test — итоговый гейт. Результат на frozen test v2 (n=140): challenger accuracy 0.550 / log_loss 0.6885 против LR 0.5571 / 0.6826; парная разница log_loss CI95 [−0.018, +0.030] — значимого преимущества нет. **Порог 0.70 (ADR-007) не достигнут обеими моделями; champion остаётся LR (рекомендация), промо — решение владельца.** Версия `ad782611` зарегистрирована candidate + 140 снимков/оценок. Отклонения от карточки: (1) PATCH-002/TEAM-002 не входили — те же 9 признаков, что у LR (зафиксировано в manifest), (2) сплит v2 `docs/frozen_split_2026-09-26.json` — когорта выросла после 09-22, guard отказал прогону v1, расширение проверено (131/131 исходных test-игр остались в test), (3) `src/models/catboost_challenger.py` → `scripts/run_catboost_challenger.py` (patтерн ML-001).
 - **GOAL:** Обучить CatBoost challenger на CPU и **сравнить** с LR на том же протоколе. **Победа над LR не требуется для MVP.**
 - **CONTEXT:** Challenger допустим только после baseline; CPU-only. **Выбор/промо модели делается на tuning folds**, калибровка — отдельный шаг (`CAL-002/003`), а **untouched test используется только как итоговый гейт и не участвует в подборе победителя**. Champion'ом по итогам гейта может остаться LR.
 - **INPUT:** `ML-001`, `PATCH-002`, `TEAM-002`.
