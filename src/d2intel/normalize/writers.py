@@ -56,7 +56,7 @@ def insert_row(
     placeholders: list[str] = []
     for name, value in values.items():
         columns.append(name)
-        if isinstance(value, (dict, list)):
+        if isinstance(value, (dict | list)):
             placeholders.append(f"CAST(:{name} AS jsonb)")
             params[name] = json.dumps(value)
         else:

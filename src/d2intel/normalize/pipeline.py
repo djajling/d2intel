@@ -32,6 +32,7 @@ from d2intel.normalize import identity, writers
 from d2intel.normalize.map_index import GamePlan, SeriesPlan, plan_all
 from d2intel.normalize.payloads import (
     MatchDetailRecord,
+    PatchEntry,
     ProMatchRecord,
     find_pro_match,
     parse_match_detail,
@@ -117,7 +118,7 @@ def _normalize_patches(
 ) -> None:
     """Справочник патчей. Граница патча — начало следующего."""
     rows = _fetch_observations(session, "patch_constants")
-    entries: list[tuple[Any, str, datetime]] = []
+    entries: list[tuple[PatchEntry, str, datetime]] = []
     seen: set[str] = set()
     for row in rows:
         payload = _as_sequence(_decode_json(row.payload_json))
@@ -713,7 +714,7 @@ def _quarantine_game(
 
 def _decode_json(value: Any) -> Any:
     """Раскодировать payload, если драйвер вернул его строкой."""
-    if isinstance(value, (str, bytes)):
+    if isinstance(value, (str | bytes)):
         try:
             return json.loads(value)
         except (ValueError, TypeError):
@@ -723,7 +724,7 @@ def _decode_json(value: Any) -> Any:
 
 def _as_sequence(payload: Any) -> Sequence[Any] | None:
     """Payload как список записей (страницы и справочники приходят массивом)."""
-    if isinstance(payload, Sequence) and not isinstance(payload, (str, bytes)):
+    if isinstance(payload, Sequence) and not isinstance(payload, (str | bytes)):
         return payload
     return None
 
@@ -734,7 +735,7 @@ def _jsonable(payload: Mapping[str, Any]) -> dict[str, Any]:
     for key, value in payload.items():
         if isinstance(value, datetime):
             result[key] = value.isoformat()
-        elif isinstance(value, (str, int, float, bool)) or value is None:
+        elif isinstance(value, (str | int | float | bool)) or value is None:
             result[key] = value
         else:
             result[key] = str(value)

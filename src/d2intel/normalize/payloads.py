@@ -104,7 +104,7 @@ def parse_match_detail(payload: Mapping[str, Any]) -> MatchDetailRecord | None:
         return None
     raw_players = payload.get("players")
     players: tuple[PlayerEntry, ...] = ()
-    if isinstance(raw_players, Sequence) and not isinstance(raw_players, (str, bytes)):
+    if isinstance(raw_players, Sequence) and not isinstance(raw_players, (str | bytes)):
         players = tuple(
             entry
             for entry in (_parse_player(item) for item in raw_players if isinstance(item, Mapping))
@@ -161,7 +161,7 @@ def find_pro_match(payload: Any, match_id: str | int) -> ProMatchRecord | None:
     Страница хранится целиком (один `content_hash` на страницу), а наблюдения —
     по записям, поэтому привязка идёт по `provider_entity_id` наблюдения.
     """
-    if not isinstance(payload, Sequence) or isinstance(payload, (str, bytes)):
+    if not isinstance(payload, Sequence) or isinstance(payload, (str | bytes)):
         return None
     wanted = str(match_id)
     for item in payload:
