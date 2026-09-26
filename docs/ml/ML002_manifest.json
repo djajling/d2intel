@@ -25,7 +25,10 @@
       "d_player_wr",
       "d_player_kda",
       "d_player_gpm",
-      "d_player_xpm"
+      "d_player_xpm",
+      "d_roster_days_since_last",
+      "d_roster_changes_30d",
+      "d_roster_standin_share_30d"
     ],
     "builder": "PriorFormBuilder(evaluation_mode=event_asof), выравнивание в канонические координаты когорты (team_a_id < team_b_id)",
     "nan_policy": "CatBoost обучается на NaN нативно (без импутации) — отличие от LR, который импутирует нулём дифференциала; обе политики зафиксированы здесь до обучения",
@@ -34,12 +37,17 @@
       "version": "patch-weight.v2",
       "function": "w = patch_decay ** |ordinal(prior_patch) - ordinal(target_patch)|; unknown patch → patch_other_weight (0.6); порядок патчей — PATCH-001 (effective_from)",
       "decay_grid": [
-        0.6,
-        0.75,
-        0.9
+        0.6
       ],
-      "selection": "пер-decay: датасет пересобирается, LR (C-грид ML-001) выбирается по min valid log_loss; лучший decay → грид CatBoost. Test не участвует.",
+      "selection": "decay зафиксирован в ревизии 3 (0.6; различия между вариантами в 5-м знаке) — повторный выбор в ревизии 4 не выполняется",
       "fit_note": "patch_decay — гиперпараметр tuning-фолдов, из данных не фнтся (PriorFormParams.fit трогает только μ); mask target_patch_unknown отличает отсутствие патча от нулевого веса"
+    },
+    "roster_features": {
+      "version": "roster.v1",
+      "task": "TEAM-002, prior known roster (G-ROSTER)",
+      "source": "roster_membership (DATA-001); фактический состав матча-цели исключён явно (exclude_game_id)",
+      "columns": "d_roster_days_since_last (давность последнего свидетельства), d_roster_changes_30d (приток новых игроков за 30д), d_roster_standin_share_30d (доля is_standin в окне 30д; <3 свидетельств → None)",
+      "fallback": "нет свидетельств → NaN + маска roster_avail=False; неизвестное не подменяется нулём"
     }
   },
   "data": {
@@ -52,7 +60,7 @@
     },
     "split_supersedes": {
       "manifest": "docs/frozen_split_2026-09-22.json",
-      "revision_note": "Ревизия 3 manifest (2026-09-26): признаки расширены PATCH-002 — затухание по патч-расстоянию + новый признак d_team_same_patch_n; колонки: 10. Ревизия 2 (сплит v2) и ревизия 1 (сплит v1, прогон не состоялся) — история в git."
+      "revision_note": "Ревизия 4 manifest (2026-09-27): признаки расширены TEAM-002 — prior-known-roster (3 новых дифференциала, 13 колонок). Ревизия 3: PATCH-002 (патч-веса); ревизия 2: сплит v2; ревизия 1: сплит v1 (прогон не состоялся). История в git."
     },
     "note": "Покрытие player-признаков может отличаться от прогона ML-001 (backfill идёт) — фактическое покрытие фиксируется в отчёте прогона. Отклонение от карточки: PATCH-002/TEAM-002 не входят — challenger обучается на том же наборе из 9 prior-form признаков, что LR, чтобы сравнение было честным; расширение признаков — будущий прогон с новым manifest."
   },

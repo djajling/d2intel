@@ -47,6 +47,8 @@ import pandas as pd
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from d2intel.features.roster import RosterForm, fetch_roster_memberships, roster_form
+
 #: Версия схемы признаков. Меняется при любом изменении состава/формул.
 FEATURE_SCHEMA_VERSION = "prior-form.v1"
 
@@ -763,6 +765,7 @@ class PriorFormBuilder:
             targets = [t for t in targets if t.series_id in self._series_ids]
         prior_games = fetch_prior_games(self._session)
         participants = fetch_participants(self._session)
+        roster_memberships = fetch_roster_memberships(self._session)
         patch_order = fetch_patch_order(self._session) if self._params.patch_decay is not None else None
 
         records: list[dict[str, object]] = []
@@ -811,6 +814,20 @@ class PriorFormBuilder:
                 evaluation_mode=self._evaluation_mode,
                 exclude_game_id=target.game_id,
             )
+            roster_a = roster_form(
+                roster_memberships,
+                team_id=target.team_a_id,
+                cutoff=target.cutoff_at,
+                result_lag=self._params.result_lag,
+                exclude_game_id=target.game_id,
+            )
+            roster_b = roster_form(
+                roster_memberships,
+                team_id=target.team_b_id,
+                cutoff=target.cutoff_at,
+                result_lag=self._params.result_lag,
+                exclude_game_id=target.game_id,
+            )
 
             train_eligible, exclusion_reason = self._eligibility(target)
             if train_eligible:
@@ -830,6 +847,8 @@ class PriorFormBuilder:
                     form_b=form_b,
                     players_a=players_a,
                     players_b=players_b,
+                    roster_a=roster_a,
+                    roster_b=roster_b,
                     evaluation_mode=self._evaluation_mode,
                     train_eligible=train_eligible,
                     exclusion_reason=exclusion_reason,
@@ -881,6 +900,8 @@ def _row_to_dict(
     form_b: TeamForm,
     players_a: PlayerForm,
     players_b: PlayerForm,
+    roster_a: RosterForm,
+    roster_b: RosterForm,
     evaluation_mode: str,
     train_eligible: bool,
     exclusion_reason: str | None,
@@ -905,6 +926,8 @@ def _row_to_dict(
     _put_team_features(row, form_b, side="b")
     _put_player_features(row, players_a, side="a")
     _put_player_features(row, players_b, side="b")
+    _put_roster_features(row, roster_a, side="a")
+    _put_roster_features(row, roster_b, side="b")
     _put_differentials(row)
     return row
 
@@ -943,6 +966,20 @@ def _put_player_features(row: dict[str, object], form: PlayerForm, *, side: str)
     row[f"player_{side}_avail"] = form.avail
 
 
+def _put_roster_features(row: dict[str, object], form: RosterForm, *, side: str) -> None:
+    """Prior-known roster признаки одной стороны + маска доступности (TEAM-002)."""
+    row[f"roster_{side}_days_since_last"] = (
+        form.days_since_last if form.days_since_last is not None else float("nan")
+    )
+    row[f"roster_{side}_changes_30d"] = (
+        form.changes_30d if form.changes_30d is not None else float("nan")
+    )
+    row[f"roster_{side}_standin_share_30d"] = (
+        form.standin_share_30d if form.standin_share_30d is not None else float("nan")
+    )
+    row[f"roster_{side}_avail"] = form.avail
+
+
 def _put_differentials(row: dict[str, object]) -> None:
     """Side-neutral дифференциалы A−B (`ML.md` §1).
 
@@ -959,6 +996,15 @@ def _put_differentials(row: dict[str, object]) -> None:
     row["d_player_kda"] = _diff(row, "player_a_kda", "player_b_kda")
     row["d_player_gpm"] = _diff(row, "player_a_gpm", "player_b_gpm")
     row["d_player_xpm"] = _diff(row, "player_a_xpm", "player_b_xpm")
+    row["d_roster_days_since_last"] = _diff(
+        row, "roster_a_days_since_last", "roster_b_days_since_last"
+    )
+    row["d_roster_changes_30d"] = _diff(
+        row, "roster_a_changes_30d", "roster_b_changes_30d"
+    )
+    row["d_roster_standin_share_30d"] = _diff(
+        row, "roster_a_standin_share_30d", "roster_b_standin_share_30d"
+    )
 
 
 def _diff(row: dict[str, object], left: str, right: str) -> float:
