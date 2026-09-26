@@ -20,7 +20,7 @@ from d2intel.ingestion.raw_capture import (
     RUN_QUOTA_EXHAUSTED,
     RUN_STALE,
 )
-from d2intel.ingestion.sync_once import dry_run_page, run_sync_once
+from d2intel.ingestion.sync_once import dry_run_page, run_head_sync, run_sync_once
 from d2intel.ingestion.validation import QuarantineReason
 from tests.ingestion.conftest import (
     FakeClock,
@@ -225,3 +225,71 @@ def test_dry_run_does_not_write(db_session: Session, recorded: RecordedRequests)
     assert summary["retrieval_status"] == "ok"
     assert count(db_session, "raw_payload") == 0
     assert count(db_session, "ingestion_run") == 0
+
+
+def test_head_sync_catches_up_new_matches(
+    db_session: Session, fake_wall_clock: FakeWallClock, recorded: RecordedRequests
+) -> None:
+    """Head-sync догоняет свежие матчи от верха выдачи до watermark.
+
+    Имитация реальной ситуации: watermark уже на старых матчах, а источник
+    отдаёт более свежие сверху. `run_sync_once` их не найдёт, потому что
+    возобновляет пагинацию от watermark вниз.
+    """
+    old_pages: dict[int | None, list[dict[str, object]]] = {
+        None: [pro_match_row(140), pro_match_row(120)],
+        120: [],
+    }
+    handler = paged_handler(old_pages, recorded)
+    client = make_client(handler, now=fake_wall_clock)
+
+    # Обычный прогон «в прошлом»: watermark опускается до 120.
+    first = run_sync_once(session=db_session, client=client, max_pages=2, overlap_pages=0)
+    assert first.cursor_after == "120"
+
+    # Источник принёс свежие матчи сверху (300 > 120).
+    fresh_pages: dict[int | None, list[dict[str, object]]] = {
+        None: [pro_match_row(300), pro_match_row(250)],
+        250: [pro_match_row(200), pro_match_row(150)],
+        150: [],
+    }
+    fresh_client = make_client(paged_handler(fresh_pages, recorded), now=fake_wall_clock)
+
+    fresh = run_head_sync(session=db_session, client=fresh_client, max_pages=3)
+    assert fresh.status == RUN_COMPLETED
+    # Первые страницы — свежие, последняя (от 250) доходит до watermark 120.
+    assert fresh.raw_inserted > 0
+    assert fresh.records > 0
+    assert fresh.cursor_after is not None
+    assert int(fresh.cursor_after) >= 120
+
+
+def test_head_sync_stops_at_existing_watermark(
+    db_session: Session, fake_wall_clock: FakeWallClock, recorded: RecordedRequests
+) -> None:
+    """Если верх страницы уже известен (ниже watermark), спускаемся не дальше."""
+    pages: dict[int | None, list[dict[str, object]]] = {
+        None: [pro_match_row(100), pro_match_row(90)],
+        90: [],
+    }
+    handler = paged_handler(pages, recorded)
+    client = make_client(handler, now=fake_wall_clock)
+
+    seeded = run_sync_once(session=db_session, client=client, max_pages=2, overlap_pages=0)
+    assert seeded.cursor_after == "90"
+
+    repeat = run_head_sync(session=db_session, client=client, max_pages=3)
+    assert repeat.status == RUN_COMPLETED
+    # Спустились до watermark — новых raw-страниц не добавлено, только дубль.
+    assert repeat.raw_inserted == 0
+    assert repeat.raw_deduplicated > 0
+
+
+def test_head_sync_rejects_other_endpoints(
+    db_session: Session, recorded: RecordedRequests
+) -> None:
+    client = make_client(recording_handler(lambda request: json_response([]), recorded))
+    with pytest.raises(ValueError):
+        run_head_sync(
+            session=db_session, client=client, endpoint_kind=EndpointKind.MATCH_DETAIL
+        )

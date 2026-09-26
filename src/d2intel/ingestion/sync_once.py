@@ -50,6 +50,112 @@ from d2intel.ingestion.raw_capture import (
 LOGGER = logging.getLogger("d2intel.ingestion.sync_once")
 
 
+def run_head_sync(
+    *,
+    session: Session,
+    client: OpenDotaClient,
+    max_pages: int = 1,
+    endpoint_kind: EndpointKind = EndpointKind.PRO_MATCHES,
+) -> RunReport:
+    """Синхронизация **свежих** матчей от верха выдачи proMatches.
+
+    В отличие от `run_sync_once`, который возобновляет пагинацию от
+    сохранённого watermark (и потому догоняет только пропуски в прошлом),
+    head-обход начинает с самой свежей страницы и спускается вниз до тех
+    пор, пока не встретит уже известный watermark. Это режим «догнать
+    настоящее», а не «доархивировать прошлое».
+
+    Идемпотентен: пересечение с уже наблюдёнными страницами не дублирует raw.
+    """
+    if endpoint_kind is not EndpointKind.PRO_MATCHES:
+        raise ValueError("head-sync поддерживает только proMatches")
+
+    capture = RawCapture(session, client.contract)
+    cursor = capture.load_cursor(str(endpoint_kind))
+    watermark = int(cursor.cursor_value) if cursor and cursor.cursor_value else None
+    run_id = capture.start_run(cursor_before=cursor.cursor_value if cursor else None)
+
+    pages = 0
+    records = 0
+    quarantined = 0
+    reasons: dict[str, int] = {}
+    raw_inserted = 0
+    raw_deduplicated = 0
+    observations = 0
+    cursor_after = cursor.cursor_value if cursor else None
+    status = RUN_COMPLETED
+    error: str | None = None
+
+    try:
+        for batch in client.iter_pro_matches(max_pages=max_pages, cursor_payload={}):
+            newest = _page_newest_id(batch)
+            if watermark is not None and newest is not None and newest <= watermark:
+                # Спустились до известного watermark — дальше только старое.
+                LOGGER.info("head-sync reached watermark %s, stopping", watermark)
+                break
+            result = capture.ingest_batch(batch, run_id)
+            pages += 1
+            records += len(batch.records)
+            quarantined += len(batch.quarantined)
+            reasons = _merge_counts(
+                reasons, quarantine_summary([_reason_row(r) for r in batch.quarantined])
+            )
+            raw_inserted += 1 if result.raw_inserted else 0
+            raw_deduplicated += 0 if result.raw_inserted else 1
+            observations += result.observations_inserted
+            if result.cursor_value is not None:
+                cursor_after = result.cursor_value
+            if batch.next_cursor is None:
+                break
+    except QuotaExhaustedError as exc:
+        status = RUN_QUOTA_EXHAUSTED
+        error = _safe_error(exc)
+    except SourceUnavailableError as exc:
+        status = RUN_STALE
+        error = _safe_error(exc)
+    except (AuthError, SourceRequestError, MalformedResponseError, RateLimitedError) as exc:
+        status = RUN_FAILED
+        error = _safe_error(exc)
+    except IngestionError as exc:  # pragma: no cover - защитная ветка
+        status = RUN_FAILED
+        error = _safe_error(exc)
+
+    cursor_state = capture.load_cursor(str(endpoint_kind))
+    capture.finish_run(
+        run_id,
+        status=status,
+        error_summary=error,
+        quota_headers=client.quota.journal_payload(source_id=client.contract.source_id),
+        cursor_after=cursor_state.cursor_value if cursor_state else cursor_after,
+    )
+    report = RunReport(
+        run_id=run_id,
+        status=status,
+        pages=pages,
+        records=records,
+        quarantined=quarantined,
+        quarantined_by_reason=reasons,
+        raw_inserted=raw_inserted,
+        raw_deduplicated=raw_deduplicated,
+        observations=observations,
+        cursor_before=cursor.cursor_value if cursor else None,
+        cursor_after=cursor_state.cursor_value if cursor_state else cursor_after,
+        error=error,
+    )
+    LOGGER.info("head-sync finished %s", report.as_dict())
+    return report
+
+
+def _page_newest_id(batch: Any) -> int | None:
+    """Самый большой provider_entity_id на странице (верх выдачи)."""
+    ids = [
+        int(record.provider_entity_id)
+        for record in batch.records
+        if str(record.provider_entity_id or "").isdigit()
+    ]
+    return max(ids) if ids else None
+
+
 @dataclass(frozen=True)
 class RunReport:
     """Отчёт прогона. Секретов не содержит по построению."""

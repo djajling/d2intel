@@ -31,7 +31,7 @@ from d2intel.ingestion.raw_capture import (
     RUN_QUOTA_EXHAUSTED,
     RUN_STALE,
 )
-from d2intel.ingestion.sync_once import dry_run_page, run_sync_once
+from d2intel.ingestion.sync_once import dry_run_page, run_head_sync, run_sync_once
 
 EXIT_CODES = {
     RUN_COMPLETED: 0,
@@ -61,6 +61,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Запросить одну страницу и показать форму ответа, ничего не записывая.",
     )
+    parser.add_argument(
+        "--head",
+        action="store_true",
+        help="Синхронизировать свежие матчи от верха выдачи до известного watermark "
+        "(догнать настоящее), а не возобновлять пагинацию от watermark.",
+    )
     return parser.parse_args(argv)
 
 
@@ -76,12 +82,19 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         session = SessionLocal()
         try:
-            report = run_sync_once(
-                session=session,
-                client=client,
-                max_pages=args.pages,
-                overlap_pages=args.overlap_pages,
-            )
+            if args.head:
+                report = run_head_sync(
+                    session=session,
+                    client=client,
+                    max_pages=args.pages,
+                )
+            else:
+                report = run_sync_once(
+                    session=session,
+                    client=client,
+                    max_pages=args.pages,
+                    overlap_pages=args.overlap_pages,
+                )
         finally:
             session.close()
     print(json.dumps(report.as_dict(), ensure_ascii=False, indent=2))
