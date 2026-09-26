@@ -65,7 +65,7 @@ MATCHES_COUNT_SQL = f"""
     WITH eligible AS ({_ELIGIBLE_MATCHES})
     SELECT count(*)
       FROM eligible
-     WHERE (:search IS NULL
+     WHERE (CAST(:search AS text) IS NULL
             OR team_a ILIKE :search
             OR team_b ILIKE :search
             OR COALESCE(tournament_name, '') ILIKE :search)
@@ -94,7 +94,7 @@ MATCHES_SQL = f"""
            ORDER BY ps.computed_at DESC, ps.snapshot_seq DESC
            LIMIT 1
       ) AS latest ON TRUE
-     WHERE (:search IS NULL
+     WHERE (CAST(:search AS text) IS NULL
             OR team_a ILIKE :search
             OR team_b ILIKE :search
             OR COALESCE(tournament_name, '') ILIKE :search)

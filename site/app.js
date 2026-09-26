@@ -613,7 +613,7 @@ async function refreshWorkspace({ toast = false } = {}) {
       $('#model-sidebar-status').textContent = describeError(error);
       setHealth(false, 'Локальный API недоступен');
     });
-  await Promise.all([overviewPromise, loadMatches(), loadPredictions(), checkHealth()]);
+  await Promise.all([overviewPromise, loadMatches(), loadPredictions(), loadSchedule(), checkHealth()]);
   updateTimestamp();
   renderMatches();
   renderPredictions();
@@ -901,5 +901,161 @@ function bindEvents() {
   });
 }
 
+// ===== Расписание (ручной ввод владельца; миграция 0004, ADR-006) =====
+
+function renderSchedule(items) {
+  const container = $('#schedule-list');
+  if (!container) return;
+  container.replaceChildren();
+  const counter = $('#nav-schedule-count');
+  if (counter) counter.textContent = String(items.filter((item) => item.status === 'upcoming').length);
+  if (!items.length) {
+    container.append(el('p', 'schedule-empty', 'Фикстур пока нет. Добавьте предстоящий матч Wallachia вручную: имена команд — как в БД.'));
+    return;
+  }
+  for (const item of items) {
+    const row = el('article', 'schedule-row');
+    const main = el('div', 'schedule-main');
+    const teams = el('p', 'schedule-teams');
+    teams.append(el('span', 'table-primary', `${item.team_a_label} vs ${item.team_b_label}`));
+    teams.append(el('span', 'table-secondary', item.stage_label || 'стадия не указана'));
+    main.append(teams);
+    const meta = el('p', 'schedule-meta');
+    meta.append(el('span', 'table-primary', item.tournament_label));
+    meta.append(el('span', 'table-secondary', item.scheduled_at ? `ожидается ${formatDateTime(item.scheduled_at)}` : 'время не указано'));
+    main.append(meta);
+    row.append(main);
+
+    const statusCell = el('div', 'schedule-status');
+    const statusClass = { upcoming: 'table-secondary', frozen: 'table-success', played: 'table-primary', cancelled: 'table-muted' }[item.status] || 'table-secondary';
+    statusCell.append(el('span', statusClass, { upcoming: 'предстоит', frozen: 'заморожено', played: 'сыграно', cancelled: 'отменено' }[item.status] || item.status));
+    if (item.freeze_id) statusCell.append(el('span', 'table-secondary', `freeze ${String(item.freeze_id).slice(0, 8)}`));
+    row.append(statusCell);
+
+    const actions = el('div', 'schedule-actions');
+    if (item.status === 'upcoming') {
+      const freezeButton = el('button', 'button button--primary', 'Заморозить прогноз');
+      freezeButton.type = 'button';
+      freezeButton.dataset.freezeFixture = item.id;
+      freezeButton.dataset.teams = `${item.team_a_label} vs ${item.team_b_label}`;
+      actions.append(freezeButton);
+    }
+    if (item.status === 'frozen') {
+      const draftButton = el('button', 'button button--outline', 'Внести драфт');
+      draftButton.type = 'button';
+      draftButton.dataset.draftFixture = item.id;
+      actions.append(draftButton);
+    }
+    const deleteButton = el('button', 'button button--outline schedule-delete', 'Удалить');
+    deleteButton.type = 'button';
+    deleteButton.dataset.deleteFixture = item.id;
+    actions.append(deleteButton);
+    row.append(actions);
+    container.append(row);
+  }
+}
+
+async function loadSchedule() {
+  const container = $('#schedule-list');
+  if (!container) return;
+  try {
+    const items = await requestJSON('/schedule');
+    renderSchedule(Array.isArray(items) ? items : []);
+  } catch (error) {
+    container.replaceChildren(el('p', 'schedule-empty', describeError(error)));
+  }
+}
+
+async function createScheduleFixture(event) {
+  event.preventDefault();
+  const submit = $('#schedule-submit');
+  const payload = {
+    tournament_label: $('#schedule-tournament').value.trim(),
+    team_a_label: $('#schedule-team-a').value.trim(),
+    team_b_label: $('#schedule-team-b').value.trim(),
+    stage_label: $('#schedule-stage').value.trim() || null,
+  };
+  const timeValue = $('#schedule-time').value;
+  if (timeValue) payload.scheduled_at = new Date(timeValue).toISOString();
+  if (!payload.tournament_label || !payload.team_a_label || !payload.team_b_label) return;
+  submit.disabled = true;
+  try {
+    await requestJSON('/schedule', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    showToast('Фикстура добавлена в расписание.', 'success');
+    $('#schedule-form').reset();
+    await loadSchedule();
+  } catch (error) {
+    showToast(describeError(error), 'error');
+  } finally {
+    submit.disabled = false;
+  }
+}
+
+async function freezeScheduleFixture(fixtureId, teams) {
+  const confirmed = window.confirm(`Заморозить prospective-прогноз для ${teams}?
+
+cutoff = «сейчас» (до матча). Будет создан новый неизменяемый снимок с текущими признаками и вероятностями. Если матч уже начался или команды не канонические — заморозка честно откажет.`);
+  if (!confirmed) return;
+  try {
+    const result = await requestJSON(`/schedule/${encodeURIComponent(fixtureId)}/freeze`, { method: 'POST' });
+    const freezeOutput = result.freeze_output || '';
+    const probabilityLine = freezeOutput.split('\n').find((line) => line.includes('p_a')) || '';
+    showToast(`Заморожено. ${probabilityLine.trim()}`, 'success');
+    await loadSchedule();
+  } catch (error) {
+    showToast(describeError(error), 'error');
+  }
+}
+
+async function saveDraftObservation(fixtureId) {
+  const raw = window.prompt('Наблюдаемый драфт (JSON с трансляции), напр.:\n{"radiant_picks": ["axe","cm","void","kotl","ls"],"dire_picks": ["pudge","wd","sf","kunkka","am"],"source": "broadcast"}');
+  if (!raw) return;
+  let draft;
+  try {
+    draft = JSON.parse(raw);
+  } catch {
+    showToast('Драфт должен быть корректным JSON.', 'error');
+    return;
+  }
+  try {
+    const result = await requestJSON(`/schedule/${encodeURIComponent(fixtureId)}/draft`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ draft }) });
+    showToast(result.draft_note || 'Драфт сохранён (данные Gate-2).', 'success');
+    await loadSchedule();
+  } catch (error) {
+    showToast(describeError(error), 'error');
+  }
+}
+
+async function deleteScheduleFixture(fixtureId) {
+  if (!window.confirm('Удалить фикстуру из расписания?')) return;
+  try {
+    await requestJSON(`/schedule/${encodeURIComponent(fixtureId)}`, { method: 'DELETE' });
+    await loadSchedule();
+  } catch (error) {
+    showToast(describeError(error), 'error');
+  }
+}
+
+function bindSchedule() {
+  const form = $('#schedule-form');
+  if (!form) return;
+  form.addEventListener('submit', createScheduleFixture);
+  $('#schedule-list').addEventListener('click', (event) => {
+    const freezeButton = event.target.closest('[data-freeze-fixture]');
+    if (freezeButton) {
+      freezeScheduleFixture(freezeButton.dataset.freezeFixture, freezeButton.dataset.teams || '');
+      return;
+    }
+    const draftButton = event.target.closest('[data-draft-fixture]');
+    if (draftButton) {
+      saveDraftObservation(draftButton.dataset.draftFixture);
+      return;
+    }
+    const deleteButton = event.target.closest('[data-delete-fixture]');
+    if (deleteButton) deleteScheduleFixture(deleteButton.dataset.deleteFixture);
+  });
+}
+
+bindSchedule();
 bindEvents();
 refreshWorkspace();

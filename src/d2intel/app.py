@@ -19,6 +19,7 @@ from d2intel import __version__
 from d2intel.api.dashboard import router as dashboard_router
 from d2intel.api.health import router as health_router
 from d2intel.api.predict import router as predict_router
+from d2intel.api.schedule import router as schedule_router
 from d2intel.web.views import router as web_router
 
 SITE_DIR = Path(__file__).resolve().parents[2] / "site"
@@ -37,6 +38,7 @@ def create_app() -> FastAPI:
     app.include_router(health_router)
     app.include_router(predict_router)
     app.include_router(dashboard_router)
+    app.include_router(schedule_router)
     app.include_router(web_router)
     # Статический workbench монтируется последним: маршруты API и /match
     # имеют приоритет, всё остальное отдаёт site/ (index.html на /).
