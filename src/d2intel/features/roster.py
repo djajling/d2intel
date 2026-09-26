@@ -145,8 +145,13 @@ def roster_form(
 
     standin_share: float | None = None
     if len(window_rows) >= min_window:
-        standin_flags = [bool(row.is_standin) for row in window_rows]
-        standin_share = sum(standin_flags) / len(standin_flags)
+        # Доля считается ТОЛЬКО по свидетельствам, где is_standin известен:
+        # NULL (источник не заполняет флаг) — «нет данных», а не «0% стендинов».
+        known_flags = [
+            bool(row.is_standin) for row in window_rows if row.is_standin is not None
+        ]
+        if known_flags:
+            standin_share = sum(known_flags) / len(known_flags)
 
     return RosterForm(
         n_memberships=len(team_rows),

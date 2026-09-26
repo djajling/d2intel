@@ -121,6 +121,31 @@ def test_standin_share_uses_window_and_min_sample() -> None:
     assert sparse_form.avail is True  # давность/изменения посчитаны
 
 
+def test_standin_null_is_unknown_not_zero() -> None:
+    """is_standin = NULL (источник не заполняет) → доля None, а не 0.0."""
+    team = uuid4()
+    rows = [
+        _row(team=team, player=uuid4(), days_ago=d, standin=None)
+        for d in (5.0, 4.0, 3.0)
+    ]
+    form = roster_form(rows, team_id=team, cutoff=CUTOFF, result_lag=LAG)
+    assert form.standin_share_30d is None
+    assert form.avail is True  # давность/изменения посчитаны
+
+
+def test_standin_share_ignores_null_rows() -> None:
+    """NULL-свидетельства не разбавляют долю: 1 из 2 известных = 0.5."""
+    team = uuid4()
+    rows = [
+        _row(team=team, player=uuid4(), days_ago=5.0, standin=True),
+        _row(team=team, player=uuid4(), days_ago=4.0, standin=False),
+        _row(team=team, player=uuid4(), days_ago=3.0, standin=None),
+        _row(team=team, player=uuid4(), days_ago=2.0, standin=None),
+    ]
+    form = roster_form(rows, team_id=team, cutoff=CUTOFF, result_lag=LAG)
+    assert form.standin_share_30d == pytest.approx(0.5)
+
+
 def test_reproducible() -> None:
     team = uuid4()
     rows = [_row(team=team, days_ago=d, standin=(d == 5.0)) for d in (5.0, 4.0, 3.0)]
