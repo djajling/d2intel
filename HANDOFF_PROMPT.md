@@ -1,6 +1,6 @@
 # Актуальная передача проекта между агентами
 
-**Обновлено: 2026-09-23.** Это состояние репозитория `djajling/d2intel`, а не промпт для ручного переноса из чата. Начать с [AGENTS.md](AGENTS.md), затем читать этот файл. `HANDOFF.md` — архив, не источник текущих назначений.
+**Обновлено: 2026-09-26 (вечер).** Это состояние репозитория `djajling/d2intel`, а не промпт для ручного переноса из чата. Начать с [AGENTS.md](AGENTS.md), затем читать этот файл. `docs/archive/HANDOFF.md` — архив, не источник текущих назначений.
 
 ---
 
@@ -78,7 +78,7 @@ Dota Esports Intelligence Platform — solo-founder проект: автомат
 Три ветки слиты в `main` (remote HEAD `bb89e39`), конфликтов не было:
 
 1. `a2b6329` — `feat/FEAT-001-prior-form`: feature-слой + match-detail ingestion (раннер, расслабленный валидатор) + скрипт сборки датасета.
-2. `084d926` — `origin/lead-patch-seed`: evaluation harness (`evaluation/`), models layer (`models/`), ADR-006, frozen split, prior baseline.
+2. `084d926` — `origin/lead-patch-seed`: evaluation harness (`evaluation/`), models layer (`models/`), ADR-007 (порог приёмки; создан тогда как ADR-006-model-acceptance), frozen split, prior baseline.
 3. `bb89e39` — `origin/feat/first-intelligence-dashboard`: статический дашборд в `site/` (мокап, не API-интегрирован; base был старый `cc35c29`, но git свёл автоматические слияния чисто).
 
 **Проверки на объединённом `main`:** `pytest` безопасного набора (без деструктивных `test_migrations`/`test_constraints`) — exit 0; `ruff` — 6 старых `UP038` (`normalize/payloads.py:107,164`, `normalize/pipeline.py:716,726,737`, `normalize/writers.py:59`); `mypy src` — 4 старых union-attr (`normalize/pipeline.py:144,149,150,151`). Новых ошибок интеграция не принесла; все 34 тестовых файла и 32 модуля на месте. Рабочая БД не менялась (схема `0003`), runtime-код приложения не перезапускался.
@@ -97,7 +97,7 @@ Regression на prior-form дифференциалах (9 признаков), 
 | brier | 0.2429 | — |
 | 95% CI log_loss | 0.6535 – 0.7034 | — |
 
-Порог ADR-006 (0.70) **не достигнут** — честно зафиксировано; при n=131
+Порог ADR-007 (0.70) **не достигнут** — честно зафиксировано; при n=131
 CI точности ±8.5пп, поэтому 0.56 статистически от floor почти
 неотличим (см. расчёт порогов ниже). Зато LR — первый кандидат, который
 **несёт информацию**: log_loss лучше uniform, диапазон p_a
@@ -230,6 +230,36 @@ cutoff `2026-09-26T14:58:15Z`, **p_a = 0.4688** (Na'Vi — Team A по кано�
 prospective-пути используется только из скриптов, перезапуск сервера не
 обязателен, но желателен перед следующими вызовами `/predict`.
 
+### Сессия 2026-09-26 (поздний вечер): публикация варианта C + синхронизация статусов и линтера
+
+- **Вариант C опубликован на GitHub.** Коммит `69b4e23` (freeze/reconcile)
+  и мониторинг вечера долежались в локальной копии `C:\Users\SystemX\Documents\1233333\d2intel`
+  незапушенными: ref `origin/main` в ней был протух (показывал 09-22), поэтому
+  «33 незапушенных коммита» на самом деле уже были на GitHub; недостающими
+  были только `69b4e23` и статус мониторинга. Оба запушены в `main`
+  (`85e4632` — docs(handoff) мониторинг). Публикация выполнена по команде
+  владельца «проверь всё и займись решением задач».
+- **Коллизия ADR устранена:** `ADR-006-model-acceptance-threshold.md`
+  переименован в `docs/adr/ADR-007-model-acceptance-threshold.md` (заголовок
+  и примечание о переименовании внутри); живые ссылки обновлены
+  (`BACKLOG.md`, `docs/BASELINE.md`, `docs/RUN_2026-09-22_real_slice.md`, этот файл).
+- **Статусные документы синхронизированы с фактом:** README.md,
+  FIRST_10_TASKS.md, BACKLOG.md (шапка, ML-001 → Done 2026-09-24,
+  API-001 → Done 2026-09-25, FEAT-001 — интеграция в main отмечена).
+  Единственный источник CURRENT-блока — этот файл.
+- **Зависимости:** убран неиспользуемый `pyarrow==18.1.0`; явно объявлены
+  `numpy==2.4.6` и `joblib==1.6.0` (импортируются кодом напрямую).
+- **Архивы перенесены:** `HANDOFF.md` (452 KB), `AGENT_INF001.md`,
+  `AGENT_ING001.md` → `docs/archive/`; ссылки в AGENTS.md / REPO_LAYOUT.md / этом
+  файле обновлены.
+- **Известные ошибки линтера закрыты:** 6 `ruff` UP038 и 4 `mypy` union-attr
+  в `normalize/` исправлены — `ruff check src tests scripts` и `mypy src` чистые.
+  Полный `pytest` (включая деструктивные `test_migrations`/`test_constraints`)
+  на выделенной `d2intel_test`: **379 passed** (Python 3.11.9). Оставшиеся 26
+  mypy-ошибок в `scripts/build_prior_form_dataset.py` — отдельная задача (в CI
+  `mypy` гоняет только `src`).
+- Остатки из старых секций ниже (запись 09-23) читать с учётом этого: публиковать
+  больше нечего, все коммиты в `origin/main`.
 - CURRENT EPIC: `EPIC 12 — Prediction API`
 ### Мониторинг заморозки 2026-09-26 (вечер): матч ещё не доигран
 
@@ -263,8 +293,7 @@ reconcile это терпимо, но при росте истории потр�
   --head` (или обычный прогон) → `python scripts/normalize_once.py` →
   `python scripts/prospective_reconcile.py --all`, затем честный отчёт
   (попал/не попал, log_loss, brier). Пока матч не доигран — **ждать**;
-  публиковать 33 незапушенных коммита (включая merge
-  `feat/first-intelligence-dashboard`) — только по команде владельца.
+  публикация коммитов больше не блокер — всё запушено (см. секцию выше).
 - Решение о варианте C зафиксировано рабочим кодом; если владелец хочет
   сделать prospective-цель частью схемы постоянно — нужен отдельный ADR
   (вариант A), сам собой он не появится.
@@ -281,7 +310,7 @@ reconcile это терпимо, но при росте истории потр�
 
 ## Как работать
 
-1. Прочитать `AGENTS.md`, этот handoff и документы назначенной задачи. Репозиторий — источник контекста; `HANDOFF.md` является архивом.
+1. Прочитать `AGENTS.md`, этот handoff и документы назначенной задачи. Репозиторий — источник контекста; `docs/archive/HANDOFF.md` является архивом.
 2. Не выдавать владельцу 50 задач сразу: определять CURRENT EPIC → CURRENT TASK → WHY IT MATTERS → DEPENDENCIES → NEXT ACTION и вести последовательно.
 3. Large task → дробить. Не нужна задачу для MVP → сказать прямо. Новую фичу оценивать по impact / complexity / data requirements / ML value / product value / maintenance cost, но решение оставлять владельцу.
 4. Workflow на каждую задачу: назначение → код/архитектура → план → тесты/реализация → проверки → review → обновлённый handoff → согласованные commit/push → локальный запуск/обновление и health. Подробности и критерии завершения — `AGENTS.md`.
@@ -300,10 +329,10 @@ reconcile это терпимо, но при росте истории потр�
 ## Что внутри пакета
 
 - `AGENTS.md` — действующие правила работы; `REPO_SETUP.md` — Git и локальный запуск.
-- `HANDOFF.md` — историческая консолидированная копия (Part 1–13), не обновляется как текущий статус.
+- `docs/archive/HANDOFF.md` — историческая консолидированная копия (Part 1–13), не обновляется как текущий статус; там же `AGENT_INF001.md`/`AGENT_ING001.md`.
 - `PRODUCT.md`, `ARCHITECTURE.md`, `DATA_MODEL.md`, `FEATURES.md`, `ML.md`, `EXPERT_ENGINE.md`, `LIVE.md`, `BACKTEST.md` — архитектура по слоям.
 - `docs/FEATURE_DATASET.md` — контракт prior-form датасета (`FEAT-001`).
 - `SOURCES.md` — исследование источников и сравнение reference-проектов (включая NUKI1223/dota-predictor и amarcu/dota-predictor).
 - `BACKLOG.md` — 90 задач по 23 эпикам (00–22) с зависимостями, acceptance criteria и DoD.
 - `FIRST_10_TASKS.md` — первые ровно 10 задач.
-- `docs/adr/` — ADR-001…ADR-005.
+- `docs/adr/` — ADR-001…ADR-006 (цель прогноза) и ADR-007 (порог приёмки).

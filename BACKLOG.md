@@ -2,7 +2,7 @@
 
 **Тип документа:** полный рабочий бэклог (продуктовая и техническая декомпозиция). Это **не код** и **не план исполнения в текущей сессии**. Ни одна задача здесь не запускается, не конфигурируется и не выполняется.
 **Проект:** личный исследовательский инструмент одного основателя, только бесплатные источники.
-**Статус документа:** Proposed / Planned. **Ни одна задача не объявлена выполненной.**
+**Статус документа:** живой, актуализирован 2026-09-26. Выполнено 10 из 90: `PRD-001`, `PRD-003`, `INF-001`, `SRC-001`, `ING-001`, `DB-001`, `DATA-001` (2026-09-21), `FEAT-001` (2026-09-22), `ML-001` (2026-09-24), `API-001` (2026-09-25); статусы — в карточках. Актуальный CURRENT-блок и разрешённый scope — только `HANDOFF_PROMPT.md`.
 **Основание:** `SOURCES.md` (архитектурное исследование источников, дата пакета исследования 2026-09-16). Все ссылки на источники, лимиты и неизвестные (U1–U15) берутся из `SOURCES.md` и здесь не переизобретаются.
 **Связанный документ:** `FIRST_10_TASKS.md` (первые ровно 10 задач; ID совпадают с этим файлом, полные карточки — только здесь).
 
@@ -631,7 +631,7 @@
 - **EPIC:** 05 — Team intelligence
 - **STAGE:** MVP-FIRST10
 - **PRIORITY:** P1
-- **STATUS:** Done (2026-09-22; код в ветке `feat/FEAT-001-prior-form` до интеграции в `main`)
+- **STATUS:** Done (2026-09-22; интегрирована в `main` 2026-09-23, merge `a2b6329`)
 - **GOAL:** Собрать минимальный датасет признаков «форма/приоры» на момент до матча для первой карты — **включая минимальные Team- и Player-prior-form**, необходимые для baseline прототипа.
 - **CONTEXT:** Нужны coverage masks и различение режимов event vs observed (что было известно до cutoff против того, что наблюдалось позже). **В first10 минимальный player prior-form входит сюда**; расширенные player-агрегаты (EPIC 06) — уже MVP2-надстройка, а не предусловие первого прототипа.
 - **INPUT:** `DATA-001`.
@@ -940,7 +940,7 @@
 - **EPIC:** 10 — Baseline ML
 - **STAGE:** MVP-FIRST10
 - **PRIORITY:** P1
-- **STATUS:** In progress → **обе части выполнены (2026-09-23)**. Prior: ветка `lead-patch-seed` (test accuracy 0.5191 vs floor 0.5191). LR: `scripts/run_lr_baseline.py` на prior-form дифференциалах — test accuracy **0.5649** (floor 0.5191), log_loss **0.6786** vs uniform 0.6931, brier 0.2429; `model_version` `logreg_prior_form` + 131 snapshot + 131 evaluation в БД. Порог ADR-006 (0.70) не достигнут — при n=131 CI точности ±8.5пп, поэтому статистически от floor почти неотличим; nonetheless LR — первый кандидат, несущий информацию (диапазон p_a 0.306–0.763 vs константа 0.5131). **Повышение до champion — отдельное решение владельца по итоговому гейту.**
+- **STATUS:** Done (2026-09-24; коммиты `a7f332a`, `0f4f837`). Prior: ветка `lead-patch-seed` (test accuracy 0.5191 vs floor 0.5191). LR: `scripts/run_lr_baseline.py` на prior-form дифференциалах — test accuracy **0.5649** (floor 0.5191), log_loss **0.6786** vs uniform 0.6931, brier 0.2429; `model_version` `logreg_prior_form` + 131 snapshot + 131 evaluation в БД. Порог ADR-007 (0.70) не достигнут — при n=131 CI точности ±8.5пп, поэтому статистически от floor почти неотличим; nonetheless LR — первый кандидат, несущий информацию (диапазон p_a 0.306–0.763 vs константа 0.5131). **Повышение до champion — отдельное решение владельца по итоговому гейту.**
 - **GOAL:** Построить baseline (prior + LR) с корректным временным групповым сплитом и замороженным heldout.
 - **CONTEXT:** Research-only на этом шаге: **CatBoost пока не используется**. Сплит по сериям с purge на пересечении.
 - **INPUT:** `FEAT-001`.
@@ -1076,7 +1076,7 @@
 - **EPIC:** 12 — Prediction API
 - **STAGE:** MVP-FIRST10
 - **PRIORITY:** P1
-- **STATUS:** In progress → **выполнено (2026-09-23)**. `src/d2intel/api/predict.py` (POST `/predict/game/{game_id}`) + `src/d2intel/api/snapshots.py` (immutable `prediction_snapshot` + `feature_snapshot` + шаблонное evidence). Только game1: не-map1 цель → 400; на каждый вызов — новый `snapshot_seq` (AC #1); снимок несёт model_version/feature_snapshot/cutoff (AC #3); режим `retrospective_reconstructed` (AC #4); evidence — шаблоны с `template`-id, без LLM (AC #5); purity-проверка: независимый подсчёт доступных к cutoff карт и сравнение с признаками (AC #6). Реальный HTTP-вызов на рабочей БД: 200, p_a 0.5489, покрытие 191/38 игр. Артефакт LR теперь сериализуется (`artifacts/models/*.joblib`, gitignored) и регистрируется в `model_version.artifact_uri` — перерегистрирован под run-key `lr-inference-v1` (версия `0cd37646`). Проверки: `ruff` — 6 старых `UP038`, `mypy` — 26 старых ошибок (новых нет), `pytest` безопасного набора — **348 passed** (+14 `tests/api/test_predict.py`).
+- **STATUS:** Done (2026-09-25; коммит `4a4318c`). `src/d2intel/api/predict.py` (POST `/predict/game/{game_id}`) + `src/d2intel/api/snapshots.py` (immutable `prediction_snapshot` + `feature_snapshot` + шаблонное evidence). Только game1: не-map1 цель → 400; на каждый вызов — новый `snapshot_seq` (AC #1); снимок несёт model_version/feature_snapshot/cutoff (AC #3); режим `retrospective_reconstructed` (AC #4); evidence — шаблоны с `template`-id, без LLM (AC #5); purity-проверка: независимый подсчёт доступных к cutoff карт и сравнение с признаками (AC #6). Реальный HTTP-вызов на рабочей БД: 200, p_a 0.5489, покрытие 191/38 игр. Артефакт LR теперь сериализуется (`artifacts/models/*.joblib`, gitignored) и регистрируется в `model_version.artifact_uri` — перерегистрирован под run-key `lr-inference-v1` (версия `0cd37646`). Проверки: `ruff` — 6 старых `UP038`, `mypy` — 26 старых ошибок (новых нет), `pytest` безопасного набора — **348 passed** (+14 `tests/api/test_predict.py`).
 - **GOAL:** Сервис предсказания, который пишет immutable `Prediction`/`PredictionSnapshot`, отдаёт API и шаблонное evidence; цель — только game1.
 - **CONTEXT:** Снимки обязательны с первого прототипа. Историческая оценка маркируется `retrospective_reconstructed`.
 - **INPUT:** `ML-001`, `DB-001`.

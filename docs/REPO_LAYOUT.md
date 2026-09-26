@@ -37,7 +37,7 @@ d2intel/
   FEATURES.md  ML.md  EXPERT_ENGINE.md  LIVE.md  BACKTEST.md
   SOURCES.md  BACKLOG.md  FIRST_10_TASKS.md  REPO_SETUP.md
   AGENTS.md  HANDOFF_PROMPT.md             # правила и актуальное состояние
-  AGENT_INF001.md  AGENT_ING001.md          # архивы выполненных задач
+  docs/archive/                            # HANDOFF.md, AGENT_INF001/ING001 — архивы
   .env.example                             # только локальные дефолты
   .github/workflows/ci.yml                  # ruff + mypy + pytest, не деплой
   docker-compose.yml                       # PostgreSQL 17.4 для новой Docker-среды

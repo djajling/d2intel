@@ -5,7 +5,7 @@
 сравнивается с обязательным нижним ориентиром, а не описание «результата».
 
 Связанные документы: `docs/EVALUATION.md` (когорта, часы доступности, метрики),
-`docs/adr/ADR-006-model-acceptance-threshold.md` (порог приёмки), манифест
+`docs/adr/ADR-007-model-acceptance-threshold.md` (порог приёмки), манифест
 заморозки `docs/frozen_split_<date>.json`.
 
 ---

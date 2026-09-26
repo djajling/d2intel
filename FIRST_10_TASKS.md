@@ -2,7 +2,7 @@
 
 **Тип документа:** краткий навигационный документ. **Полные карточки задач находятся только в `BACKLOG.md`** — здесь они не дублируются.
 **Проект:** Dota Esports Intelligence Platform, solo-founder, только бесплатные источники, личный инструмент.
-**Статус:** 7 из 10 задач выполнены: `PRD-001`, `SRC-001`, `INF-001`, `DB-001`, `ING-001`, `DATA-001` (2026-09-21) и `FEAT-001` (2026-09-22, код в ветке `feat/FEAT-001-prior-form` до интеграции). Оставшиеся 3 (`ML-001`, `API-001`, `UI-001`) — `Planned`. Документ не является разрешением на исполнение: запуск следующей задачи — только по явной команде владельца.
+**Статус:** 9 из 10 задач выполнены: `PRD-001`, `SRC-001`, `INF-001`, `DB-001`, `ING-001`, `DATA-001` (2026-09-21), `FEAT-001` (2026-09-22; в `main` с 2026-09-23), `ML-001` (2026-09-24) и `API-001` (2026-09-25). Оставшаяся 1 (`UI-001`) — `Planned`. Документ не является разрешением на исполнение: запуск следующей задачи — только по явной команде владельца.
 **Основание:** `SOURCES.md`, `BACKLOG.md`.
 **Смысл первых 10:** они дают **вертикальный РЕТРОСПЕКТИВНЫЙ прототип** (raw → нормализация → фичи as-of → baseline LR → immutable snapshot → простой локальный UI на реальной held-out исторической game1). Это **НЕ полноценный pre-match MVP**.
 
@@ -19,8 +19,8 @@
 | 5 | `ING-001` | OpenDota клиент + raw capture: sync-once, pagination, retry, quota, idempotence | 02 — Data ingestion | P0 | **Done** | `SRC-001`, `DB-001` |
 | 6 | `DATA-001` | Нормализация исторических games / team / player / series, map index, participant stats, evidence roster versions, patch; карантин неоднозначного map1 | 03 — Database | P0 | **Done** | `ING-001` |
 | 7 | `FEAT-001` | Минимальный prior-form датасет as-of для map1, **включая минимальные Team- и Player-prior-form**; coverage masks; режимы event vs observed | 05 — Team intelligence | P1 | **Done** | `DATA-001` |
-| 8 | `ML-001` | Prior + Logistic Regression baseline: temporal group split, frozen heldout, Brier/logloss; research only, **CatBoost ещё нет** | 10 — Baseline ML | P1 | Planned | `FEAT-001` |
-| 9 | `API-001` | Prediction service: immutable snapshots + API + шаблонное evidence; enforcement меток historical vs real future; цель — только game1 | 12 — Prediction API | P1 | Planned | `ML-001`, `DB-001` |
+| 8 | `ML-001` | Prior + Logistic Regression baseline: temporal group split, frozen heldout, Brier/logloss; research only, **CatBoost ещё нет** | 10 — Baseline ML | P1 | **Done** | `FEAT-001` |
+| 9 | `API-001` | Prediction service: immutable snapshots + API + шаблонное evidence; enforcement меток historical vs real future; цель — только game1 | 12 — Prediction API | P1 | **Done** | `ML-001`, `DB-001` |
 | 10 | `UI-001` | Простая локальная страница матча на реальной held-out исторической game1; явно ретроспектива (не «живой» прогноз); provenance / модель / версия / причины | 13 — Frontend MVP | P1 | Planned | `API-001` |
 
 **Порядок исполнения — строго по списку** (он уже топологически отсортирован: каждая задача зависит только от предыдущих).
@@ -33,9 +33,9 @@
 
 ## 2. Текущий статус и точка решения
 
-- **Текущий эпик:** `EPIC 05 — Team intelligence`.
-- **Текущая задача:** `ML-001` — Prior + Logistic Regression baseline (зависимость `FEAT-001` теперь выполнена; статус `Planned`).
-- **Что уже сделано (по факту, всё 2026-09-21; детали и артефакты — в карточках `BACKLOG.md`):**
+- **Текущий эпик:** `EPIC 12 — Prediction API`.
+- **Текущая задача:** prospective-прогон Wallachia — вариант C (freeze → reconcile) реализован, заморозка `ce679e76` (Na'Vi vs Aurora) ждёт доигранной game1; детали — `HANDOFF_PROMPT.md`.
+- **Что уже сделано (по факту; детали и артефакты — в карточках `BACKLOG.md`):**
   - `PRD-001` — product spec v0 утверждена владельцем (`docs/PRD.md`): цель, первая карта, правила cutoff, гейты, non-goals.
   - `PRD-003` — временная семантика и снимки (`docs/PRD_TEMPORAL.md`, вариант A); `ADR-001` и `ADR-005` — Accepted.
   - `SRC-001` — вердикт гейта G-SRC (`docs/research/SRC_001_VERDICT.md`): **случай B** — история OpenDota PASS, легального бесплатного upcoming нет → работа ведётся в **ретроспективном контуре**, полноценный pre-match MVP не объявляется.
@@ -44,7 +44,9 @@
   - `ING-001` — OpenDota-клиент + raw capture, миграция `0002` (`src/d2intel/ingestion/`, `scripts/ingest_opendota_once.py`).
   - `DATA-001` — нормализация исторического ядра, миграция `0003`, карантин неоднозначного map1 (`src/d2intel/normalize/`, `scripts/normalize_once.py`).
   - `FEAT-001` (2026-09-22) — prior-form датасет as-of для map1: Team/Player priors, coverage masks, режимы `event_asof`/`observed_mode_only_study` (`src/d2intel/features/prior_form.py`, контракт — `docs/FEATURE_DATASET.md`).
-- **Следующее действие:** `ML-001` — только **после явной команды владельца** (до этого — интеграция ветки `feat/FEAT-001-prior-form` в `main`).
+  - `ML-001` (2026-09-24) — prior + LR baseline: test accuracy 0.5649 (floor 0.5191), log_loss 0.6786; порог ADR-007 (0.70) не достигнут, повышение до champion — решение владельца (`scripts/run_lr_baseline.py`).
+  - `API-001` (2026-09-25) — prediction service с immutable snapshots: `POST /predict/game/{game_id}`, только game1, режим `retrospective_reconstructed` (`src/d2intel/api/predict.py`, `snapshots.py`).
+- **Следующее действие:** `UI-001` — только **после явной команды владельца**; параллельно ждёт вердикта владельца открытый вопрос цели прогноза (`docs/adr/ADR-006-target-and-phase.md`).
 - **Далее: STOP.** Без команды владельца никакие задачи, включая `ML-001` и последующие, не начинаются. Ничего не запускается, не конфигурируется и не выполняется.
 
 ---

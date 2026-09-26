@@ -1,8 +1,8 @@
 # Dota Esports Intelligence Platform — d2intel
 
-**Статус:** ядро `PRD-001` → `DATA-001` и feature-слой `FEAT-001` реализованы. На 2026-09-22 локальный FastAPI запущен на компьютере владельца, `/health` возвращает HTTP 200 и `database: up`; схема БД — `0003`. Это запуск ядра, не готовый продукт: UI и прогнозирования пока нет. Оставшиеся задачи first-10 (`ML-001` → `UI-001`) — `Planned`, старт только по команде владельца.
+**Статус:** ядро `PRD-001` → `DATA-001`, feature-слой `FEAT-001`, baseline `ML-001` (2026-09-24) и prediction API `API-001` (2026-09-25) реализованы; схема БД — `0003`. Это вертикальный **ретроспективный** срез, не готовый продукт: UI — только статический прототип `site/` (задача `UI-001` не выполнялась), live-прогноза нет — легального бесплатного upcoming-источника не существует (вердикт `SRC-002`). Идёт ручной prospective-прогон (вариант C: заморозка Na'Vi vs Aurora ждёт доигранной game1). Актуальное состояние и CURRENT-блок — [HANDOFF_PROMPT.md](HANDOFF_PROMPT.md).
 
-**Для нового агента:** [AGENTS.md](AGENTS.md) → [актуальное состояние и блокеры](HANDOFF_PROMPT.md) → [Git и локальный деплой](REPO_SETUP.md). Передавать историю чата не нужно. Запуск не означает зелёный CI: известные ошибки проверок перечислены в передаче.
+**Для нового агента:** [AGENTS.md](AGENTS.md) → [актуальное состояние и блокеры](HANDOFF_PROMPT.md) → [Git и локальный деплой](REPO_SETUP.md). Передавать историю чата не нужно. С 2026-09-26 `ruff check src tests scripts` и `mypy src` чистые; `mypy` по `scripts/` в CI не гейтится — известные ошибки перечислены в передаче.
 
 Условия владельца: solo-founder, только бесплатные источники данных, личный исследовательский инструмент. Дата пакета: 2026-09-16 (Asia/Singapore; часы инструмента). Условия API и сведения репозиториев — срез исследования, не гарантия будущей доступности.
 
@@ -33,8 +33,9 @@
 - [ADR-004: temporal validation](docs/adr/ADR-004-temporal-validation.md)
 - [ADR-005: prediction snapshots](docs/adr/ADR-005-prediction-snapshots.md)
 - [ADR-006: цель прогноза и фаза расчёта](docs/adr/ADR-006-target-and-phase.md)
+- [ADR-007: порог приёмки модели](docs/adr/ADR-007-model-acceptance-threshold.md)
 
-`ADR-001` (database) и `ADR-005` (prediction snapshots) — **Accepted** (утверждены владельцем 2026-09-21, реализация — `DB-001`); `ADR-002`…`ADR-004` — Proposed. Product spec v0 (`docs/PRD.md`) и временная семантика (`docs/PRD_TEMPORAL.md`) утверждены владельцем. Внутренние task IDs ссылаются на BACKLOG.md; для выполненных задач пути FILES EXPECTED TO CHANGE соответствуют реально созданным файлам.
+`ADR-001` (database) и `ADR-005` (prediction snapshots) — **Accepted** (утверждены владельцем 2026-09-21, реализация — `DB-001`); `ADR-002`…`ADR-004`, `ADR-006` (цель прогноза) и `ADR-007` (порог приёмки модели) — Proposed. Product spec v0 (`docs/PRD.md`) и временная семантика (`docs/PRD_TEMPORAL.md`) утверждены владельцем. Внутренние task IDs ссылаются на BACKLOG.md; для выполненных задач пути FILES EXPECTED TO CHANGE соответствуют реально созданным файлам.
 
 **Открытое расхождение:** утверждённый `docs/PRD.md` задаёт цель «карта N после полного драфта»,
 а `PRODUCT.md`, `BACKLOG.md §1 п.6` и `FIRST_10_TASKS.md` — «первая карта до драфта». Выбор
@@ -44,7 +45,7 @@
 
 - Первый вертикальный срез — **ретроспективный** прототип на реальных game1, не выдуманный исторический live forecast.
 - Полный MVP требует проверенного бесплатного upcoming-источника, фактически работающего локального автоматического ingestion, known-roster/fallback и честной prospective оценки.
-- OpenDota history — основной кандидат; Liquipedia API upcoming — условный до access/rights/coverage gate; PandaScore не включён без разрешения для сценария с market-анализом.
+- OpenDota history — основной кандидат; Liquipedia upcoming — **no-go** по вердикту `SRC-002` (schedule-эндпоинта нет); PandaScore не включён без разрешения для сценария с market-анализом.
 - Prediction/Feature snapshots и temporal lineage нужны сразу; CatBoost — challenger, не обязательный победитель LR.
 - Live/heatmaps/expert/market доступны только по своим gates; отсутствие данных нельзя заменить уверенными обещаниями.
 
@@ -52,13 +53,13 @@
 
 Выбрать назначенную задачу → прочитать инструкции/код → план → тесты и реализация → проверки → review → обновить передачу в Git → commit и push в согласованную ветку → локальный запуск/обновление и проверка health. Подробные правила — в `AGENTS.md`. Архитектурная проблема: STOP → объяснение → альтернативы → решение владельца. Backlog сам по себе не разрешает начинать новые задачи.
 
-**CURRENT EPIC:** EPIC 05 — Team intelligence. **CURRENT TASK:** ML-001. **WHY IT MATTERS:** первый baseline (LR на prior-form признаках) с temporal split и замороженным heldout — без него нет прогноза и API/UI вертикального среза. **DEPENDENCIES:** `FEAT-001` (Done). **NEXT ACTION:** команда владельца на запуск ML-001; до этого — интеграция ветки `feat/FEAT-001-prior-form` в `main`.
+**CURRENT EPIC / CURRENT TASK / NEXT ACTION ведутся только в [HANDOFF_PROMPT.md](HANDOFF_PROMPT.md)** — единый источник, чтобы статусы не расходились. На срез 2026-09-26: EPIC 12 — Prediction API; prospective-прогон Wallachia (вариант C, заморозка `ce679e76` ждёт доигранной game1); из first-10 осталась `UI-001`; открытым остаётся вердикт по цели прогноза ([ADR-006](docs/adr/ADR-006-target-and-phase.md)).
 
 Расписание ingestion и автозапуск приложения не настроены. Возможности среды каждого агента проверяются заново; репозиторий не создаёт автоматизации помощника.
 
 ## Локальный запуск
 
-Работают инфраструктурный API, миграции `0001`–`0003`, raw ingestion, нормализация и prior-form датасет (`FEAT-001`). Model/API/UI-слои ещё не реализованы. Для Windows и текущей БД использовать [REPO_SETUP.md](REPO_SETUP.md); ниже — исходный Bash-вариант для новой dev-среды с Docker. Полные тесты разрешены только в отдельной тестовой БД.
+Работают инфраструктурный API, миграции `0001`–`0003`, raw ingestion (sync-once + head-sync), нормализация, prior-form датасет (`FEAT-001`), LR-бейзлайн (`ML-001`) и prediction API с immutable snapshots (`API-001`). UI — статический прототип `site/` без API-интеграции (`UI-001` не выполнялась). Для Windows и текущей БД использовать [REPO_SETUP.md](REPO_SETUP.md); ниже — исходный Bash-вариант для новой dev-среды с Docker. Полные тесты разрешены только в отдельной тестовой БД.
 
 ```bash
 # 1. Виртуальное окружение и pinned-зависимости (воспроизводимо)

@@ -133,7 +133,8 @@ python scripts/backfill_game_patch.py
 
 Итог: когорта выросла в 21 раз, test-сегмент — с 13 до 131 наблюдения.
 Метрику модели теперь **можно измерить**, но 70% по-прежнему означает +18.6 п.п.
-над константой 51.4% на pre-draft target без состава и драфта — см. ADR-006.
+над константой 51.4% на pre-draft target без состава и драфта — см. ADR-007
+(порог приёмки; на момент прогона документ нумеровался ADR-006).
 
 ## Чего в срезе НЕТ (важно для FEAT-001/ML-001)
 
@@ -179,7 +180,7 @@ python scripts/run_prior_baseline.py docs/frozen_split_2026-09-22.json
 | log_loss на test | 0.6925 (reference ln 2 = 0.6931) |
 | Brier на test | 0.2497 |
 | bootstrap log_loss (95%, по сериям) | 0.6881 … 0.6969 |
-| порог ADR-006 | **not met** (0.5191 < 0.70) — ожидаемо, prior не кандидат на порог |
+| порог ADR-007 | **not met** (0.5191 < 0.70) — ожидаемо, prior не кандидат на порог |
 
 Записано в БД: `model_version` 1, `prediction` 131, `prediction_snapshot` 131,
 `prediction_evaluation` 131. Перезапуск скрипта проверен — дублей нет
