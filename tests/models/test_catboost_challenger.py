@@ -125,6 +125,6 @@ def test_feature_matrix_segments_align_with_protocol() -> None:
             "series_id": ["s1", "s2"],
         }
     )
-    x, y = _feature_matrix(frame)
+    x, y = _feature_matrix(frame, FEATURE_COLUMNS)
     assert x.shape == (2, len(FEATURE_COLUMNS))
     assert y.tolist() == [1, 0]

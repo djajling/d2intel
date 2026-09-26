@@ -4,8 +4,15 @@
   "purpose": "CatBoost challenger (CPU) на том же протоколе, что LR ML-001; сравнение с неопределённостью; untouched test — только итоговый гейт.",
   "fixed_at": "2026-09-26",
   "algorithm": "catboost_prior_form",
-  "library": { "name": "catboost", "version": "1.2.10" },
-  "device": { "task_type": "CPU", "seed": 17, "thread_count": 4 },
+  "library": {
+    "name": "catboost",
+    "version": "1.2.10"
+  },
+  "device": {
+    "task_type": "CPU",
+    "seed": 17,
+    "thread_count": 4
+  },
   "features": {
     "schema_version": "prior-form.v1",
     "columns": [
@@ -14,6 +21,7 @@
       "d_team_wr_last_short",
       "d_team_n_eff",
       "d_team_days_since_last",
+      "d_team_same_patch_n",
       "d_player_wr",
       "d_player_kda",
       "d_player_gpm",
@@ -21,23 +29,48 @@
     ],
     "builder": "PriorFormBuilder(evaluation_mode=event_asof), выравнивание в канонические координаты когорты (team_a_id < team_b_id)",
     "nan_policy": "CatBoost обучается на NaN нативно (без импутации) — отличие от LR, который импутирует нулём дифференциала; обе политики зафиксированы здесь до обучения",
-    "mu_fit": "PriorFormParams.fit строго на train-метках когорты до сборки датасета (AC ML-001 #4)"
+    "mu_fit": "PriorFormParams.fit строго на train-метках когорты до сборки датасета (AC ML-001 #4)",
+    "patch_weighting": {
+      "version": "patch-weight.v2",
+      "function": "w = patch_decay ** |ordinal(prior_patch) - ordinal(target_patch)|; unknown patch → patch_other_weight (0.6); порядок патчей — PATCH-001 (effective_from)",
+      "decay_grid": [
+        0.6,
+        0.75,
+        0.9
+      ],
+      "selection": "пер-decay: датасет пересобирается, LR (C-грид ML-001) выбирается по min valid log_loss; лучший decay → грид CatBoost. Test не участвует.",
+      "fit_note": "patch_decay — гиперпараметр tuning-фолдов, из данных не фнтся (PriorFormParams.fit трогает только μ); mask target_patch_unknown отличает отсутствие патча от нулевого веса"
+    }
   },
   "data": {
     "split_manifest": "docs/frozen_split_2026-09-26.json",
     "split_content_hash": "7461035be4f914613495eaff9752994d783d19986c29b7483ee51262e4a70557",
-    "frozen_counts": { "train": 3360, "valid": 110, "test": 140 },
+    "frozen_counts": {
+      "train": 3360,
+      "valid": 110,
+      "test": 140
+    },
     "split_supersedes": {
       "manifest": "docs/frozen_split_2026-09-22.json",
-      "revision_note": "Ревизия 2 manifest (2026-09-26, до любого обучения). Прогон v1 (split eb478708) не состоялся: guard assert_frozen_matches корректно отказал — состав когорты вырос после 09-22. Границы spec сохранены; все 131 игра исходного test проверены прямыми запросами и остались в test (0 перетекли в train, 0 исключены); train вырос на поздно канонизированные старые матчи (+148), test — на новые сыгранные матчи и 1 поздно канонизированную игру (+9). Подробности в docs/frozen_split_2026-09-26.json → supersedes.reason."
+      "revision_note": "Ревизия 3 manifest (2026-09-26): признаки расширены PATCH-002 — затухание по патч-расстоянию + новый признак d_team_same_patch_n; колонки: 10. Ревизия 2 (сплит v2) и ревизия 1 (сплит v1, прогон не состоялся) — история в git."
     },
     "note": "Покрытие player-признаков может отличаться от прогона ML-001 (backfill идёт) — фактическое покрытие фиксируется в отчёте прогона. Отклонение от карточки: PATCH-002/TEAM-002 не входят — challenger обучается на том же наборе из 9 prior-form признаков, что LR, чтобы сравнение было честным; расширение признаков — будущий прогон с новым manifest."
   },
   "param_grid": {
-    "iterations": [300],
-    "depth": [3, 5],
-    "learning_rate": [0.03, 0.1],
-    "l2_leaf_reg": [3.0],
+    "iterations": [
+      300
+    ],
+    "depth": [
+      3,
+      5
+    ],
+    "learning_rate": [
+      0.03,
+      0.1
+    ],
+    "l2_leaf_reg": [
+      3.0
+    ],
     "loss_function": "Logloss",
     "allow_writing_files": false,
     "verbose": false
@@ -48,7 +81,7 @@
     "untouched_test_role": "итоговый гейт; test не читается при выборе параметров и при решении о промо"
   },
   "acceptance": {
-    "threshold_accuracy": 0.70,
+    "threshold_accuracy": 0.7,
     "basis": "ADR-007 (Accepted 2026-09-26): порог — цель приёмки для прогонов после вердикта",
     "miss_rule": "вердикт «порог не достигнут, значение X [интервал]»; модель не подгоняется под порог"
   },

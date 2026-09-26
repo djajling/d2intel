@@ -435,6 +435,12 @@ def _params_from_hyperparameters(
     overrides: dict[str, Any] = {}
     if prior_mean is not None:
         overrides["prior_mean"] = float(prior_mean)
+    # PATCH-002: patch_decay восстанавливается из гиперпараметров; отсутствие
+    # ключа (модели до PATCH-002) → legacy same/other — инференс воспроизводит
+    # ровно те веса, на которых модель училась (train/serve consistency).
+    patch_decay = hyperparameters.get("patch_decay")
+    if patch_decay is not None:
+        overrides["patch_decay"] = float(patch_decay)
     return PriorFormParams(**overrides)
 
 

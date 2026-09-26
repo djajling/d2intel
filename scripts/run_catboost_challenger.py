@@ -199,8 +199,8 @@ def _impute(x: np.ndarray, fill_value: float = 0.0) -> np.ndarray:
     return np.nan_to_num(x, nan=fill_value, posinf=fill_value, neginf=fill_value)
 
 
-def _feature_matrix(segment: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
-    x = segment[FEATURE_COLUMNS].to_numpy(dtype=float)
+def _feature_matrix(segment: pd.DataFrame, columns: list[str]) -> tuple[np.ndarray, np.ndarray]:
+    x = segment[columns].to_numpy(dtype=float)
     y = segment["y"].to_numpy(dtype=int)
     return x, y
 
@@ -362,6 +362,9 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps({"error": "неизвестная версия manifest"}, indent=2))
         return 1
     grid_spec = ml_manifest["param_grid"]
+    columns = ml_manifest["features"].get("columns", FEATURE_COLUMNS)
+    patch_spec = ml_manifest["features"].get("patch_weighting") or {}
+    decay_grid = patch_spec.get("decay_grid")
     split_manifest_path = Path(ml_manifest["data"]["split_manifest"])
     with split_manifest_path.open(encoding="utf-8") as handle:
         frozen = FrozenSplit.from_dict(json.load(handle))
@@ -374,6 +377,44 @@ def main(argv: list[str] | None = None) -> int:
 
         train_labels = [row.label for row in _segment(cohort, spec, "train")]
         params = PriorFormParams.fit(train_labels=train_labels)
+
+        # --- PATCH-002: выбор patch_decay на valid (LR, test не читается) ----
+        from sklearn.linear_model import LogisticRegression
+
+        from d2intel.evaluation.metrics import log_loss as ll
+
+        chosen_decay: float | None = None
+        decay_report: list[dict[str, Any]] = []
+        if decay_grid:
+            for decay in decay_grid:
+                d_params = PriorFormParams(
+                    prior_mean=params.prior_mean, patch_decay=float(decay)
+                )
+                d_frame = _build_matrix(session, d_params)
+                d_aligned = _align_to_cohort(d_frame, cohort)
+                d_aligned["split"] = [
+                    assign_split(cutoff, spec) for cutoff in d_aligned["cutoff_at"]
+                ]
+                d_train = d_aligned[d_aligned["split"] == "train"]
+                d_valid = d_aligned[d_aligned["split"] == "valid"]
+                xt, yt = _feature_matrix(d_train, columns)
+                xv, yv = _feature_matrix(d_valid, columns)
+                best_ll = None
+                for c_value in C_GRID:
+                    lr = LogisticRegression(
+                        C=c_value, solver="lbfgs", max_iter=1000, random_state=SEED
+                    )
+                    lr.fit(_impute(xt), yt)
+                    cur = ll(yv.tolist(), lr.predict_proba(_impute(xv))[:, 1].tolist())
+                    if best_ll is None or cur < best_ll:
+                        best_ll = cur
+                decay_report.append(
+                    {"patch_decay": float(decay), "valid_log_loss_lr_best": best_ll}
+                )
+            chosen_decay = min(
+                decay_report, key=lambda item: item["valid_log_loss_lr_best"]
+            )["patch_decay"]
+            params = PriorFormParams(prior_mean=params.prior_mean, patch_decay=chosen_decay)
 
         frame = _build_matrix(session, params)
         if frame.empty:
@@ -389,8 +430,8 @@ def main(argv: list[str] | None = None) -> int:
             return 1
 
         # --- выбор параметров ТОЛЬКО на valid (test не читается) -------------
-        x_train, y_train = _feature_matrix(train)
-        x_valid, y_valid = _feature_matrix(valid)
+        x_train, y_train = _feature_matrix(train, columns)
+        x_valid, y_valid = _feature_matrix(valid, columns)
         grid_results: list[dict[str, Any]] = []
         for depth in grid_spec["depth"]:
             for learning_rate in grid_spec["learning_rate"]:
@@ -437,7 +478,7 @@ def main(argv: list[str] | None = None) -> int:
         baseline, chosen_c = fit_lr_baseline(x_train, y_train, x_valid, y_valid)
 
         # --- untouched test: единственное чтение, итоговый гейт -------------
-        x_test, _y_test = _feature_matrix(test)
+        x_test, _y_test = _feature_matrix(test, columns)
         proba_challenger = challenger.predict_proba(x_test)[:, 1].tolist()
         proba_baseline = baseline.predict_proba(_impute(x_test))[:, 1].tolist()
         hard_test = [1 if p >= 0.5 else 0 for p in proba_challenger]
@@ -469,9 +510,11 @@ def main(argv: list[str] | None = None) -> int:
                     "l2_leaf_reg": grid_spec["l2_leaf_reg"][0],
                     "loss_function": grid_spec["loss_function"],
                     "task_type": "CPU",
-                    "feature_columns": FEATURE_COLUMNS,
+                    "feature_columns": columns,
                     "nan_policy": "native",
                     "prior_mean": params.prior_mean,
+                    "patch_decay": chosen_decay,
+                    "patch_weight_version": patch_spec.get("version"),
                     "n_train": int(len(train)),
                     "manifest": manifest_path.name,
                     "manifest_sha256": hashlib.sha256(
@@ -509,6 +552,18 @@ def main(argv: list[str] | None = None) -> int:
                 "grid_results": grid_results,
                 "chosen": dict(chosen),
                 "untouched_test_role": ml_manifest["selection"]["untouched_test_role"],
+            },
+            "patch_weighting": {
+                "version": patch_spec.get("version"),
+                "chosen_decay": chosen_decay,
+                "decay_selection_report": decay_report,
+                "weight_by_distance": {
+                    f"d={d}": (chosen_decay ** d if chosen_decay is not None else None)
+                    for d in range(5)
+                }
+                if chosen_decay is not None
+                else {"legacy": "same/other"},
+                "unknown_patch_weight": params.patch_other_weight,
             },
             "baseline_lr": {
                 "algorithm": BASELINE_ALGORITHM,

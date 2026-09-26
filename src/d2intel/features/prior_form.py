@@ -92,6 +92,11 @@ class PriorFormParams:
     patch_same_weight: float = 1.0
     #: ρ для prior-игр другого/неизвестного патча.
     patch_other_weight: float = 0.6
+    #: Затухание веса за один шаг патч-расстояния (PATCH-002). None — legacy
+    #: режим same/other (совместимость с моделями, обученными до PATCH-002:
+    #: гиперпараметры старых версий не содержат patch_decay, и инференс обязан
+    #: воспроизводить именно те веса, на которых модель училась).
+    patch_decay: float | None = None
     #: Порог n_eff, ниже которого команда помечается `low_coverage`.
     min_eff_games: float = 5.0
     #: Окно «последние N карт» (длинное).
@@ -224,17 +229,32 @@ def recency_weight(age_days: float, params: PriorFormParams) -> float:
     return math.exp(-math.log(2.0) * age_days / half_life)
 
 
-def patch_weight(prior_patch: UUID | None, target_patch: UUID | None, params: PriorFormParams) -> float:
-    """ρ(patch_i, patch_target): текущий патч — полный вес, прочие — меньше.
+def patch_weight(
+    prior_patch: UUID | None,
+    target_patch: UUID | None,
+    params: PriorFormParams,
+    patch_order: dict[UUID, int] | None = None,
+) -> float:
+    """ρ(patch_i, patch_target): затухание по патч-расстоянию (PATCH-002).
 
-    Неизвестный патч целевой игры не считается «старым» автоматически:
-    используется `patch_other_weight`, а факт неизвестности виден в маске
+    С `patch_order` (порядок патчей по `effective_from`, PATCH-001) вес
+    известного патча — `patch_decay ** distance`, где distance — число шагов
+    между патчем prior-игры и патчем цели; тот же патч → вес 1. Без
+    `patch_order` или при `patch_decay = None` — legacy same/other поведение
+    (совместимость с моделями до PATCH-002). Неизвестный патч цели или игры —
+    `patch_other_weight`, факт неизвестности виден в маске
     `target_patch_unknown`.
     """
     if target_patch is None or prior_patch is None:
         return params.patch_other_weight
     if prior_patch == target_patch:
         return params.patch_same_weight
+    if params.patch_decay is not None and patch_order is not None:
+        prior_index = patch_order.get(prior_patch)
+        target_index = patch_order.get(target_patch)
+        if prior_index is not None and target_index is not None:
+            distance = abs(prior_index - target_index)
+            return params.patch_decay ** distance
     return params.patch_other_weight
 
 
@@ -306,6 +326,7 @@ def team_form(
     params: PriorFormParams,
     evaluation_mode: str = EVENT_ASOF,
     exclude_game_id: UUID | None = None,
+    patch_order: dict[UUID, int] | None = None,
 ) -> TeamForm:
     """Team prior-form: взвешенный winrate по всем и последним N картам до cutoff.
 
@@ -331,7 +352,7 @@ def team_form(
     weighted = [
         (
             recency_weight((cutoff - game.event_time).total_seconds() / _SECONDS_PER_DAY, params)
-            * patch_weight(game.patch_id, target_patch, params),
+            * patch_weight(game.patch_id, target_patch, params, patch_order),
             game.won,
         )
         for game in team_games
@@ -604,6 +625,23 @@ def fetch_targets(session: Session) -> list[TargetRow]:
     return targets
 
 
+def fetch_patch_order(session: Session) -> dict[UUID, int]:
+    """Порядок патчей по `effective_from` (PATCH-001 → PATCH-002).
+
+    Возвращает {patch_id: ordinal}: расстояние между патчами — разница
+    ординалов. Патчи с NULL `effective_from` идут в конец в фиксированном
+    порядке `version_label` — детерминированно, но с большим расстоянием
+    они всё равно корректно теряют вес.
+    """
+    rows = session.execute(
+        text(
+            "SELECT id, effective_from, version_label FROM patch "
+            "ORDER BY effective_from ASC NULLS LAST, version_label ASC"
+        )
+    )
+    return {UUID(str(row.id)): index for index, row in enumerate(rows)}
+
+
 def fetch_prior_games(session: Session) -> list[PriorGame]:
     """Вся завершённая история с командной точки зрения (bulk-извлечение).
 
@@ -725,6 +763,7 @@ class PriorFormBuilder:
             targets = [t for t in targets if t.series_id in self._series_ids]
         prior_games = fetch_prior_games(self._session)
         participants = fetch_participants(self._session)
+        patch_order = fetch_patch_order(self._session) if self._params.patch_decay is not None else None
 
         records: list[dict[str, object]] = []
         n_train_eligible = 0
@@ -744,6 +783,7 @@ class PriorFormBuilder:
                 params=self._params,
                 evaluation_mode=self._evaluation_mode,
                 exclude_game_id=target.game_id,
+                patch_order=patch_order,
             )
             form_b = team_form(
                 prior_games,
@@ -753,6 +793,7 @@ class PriorFormBuilder:
                 params=self._params,
                 evaluation_mode=self._evaluation_mode,
                 exclude_game_id=target.game_id,
+                patch_order=patch_order,
             )
             players_a = player_form(
                 participants,
@@ -913,6 +954,7 @@ def _put_differentials(row: dict[str, object]) -> None:
     row["d_team_wr_last_short"] = _diff(row, "team_a_wr_last_short", "team_b_wr_last_short")
     row["d_team_n_eff"] = _diff(row, "team_a_n_eff", "team_b_n_eff")
     row["d_team_days_since_last"] = _diff(row, "team_a_days_since_last", "team_b_days_since_last")
+    row["d_team_same_patch_n"] = _diff(row, "team_a_same_patch_n", "team_b_same_patch_n")
     row["d_player_wr"] = _diff(row, "player_a_wr", "player_b_wr")
     row["d_player_kda"] = _diff(row, "player_a_kda", "player_b_kda")
     row["d_player_gpm"] = _diff(row, "player_a_gpm", "player_b_gpm")
