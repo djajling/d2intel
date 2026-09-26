@@ -75,6 +75,30 @@ FK на существующие строки (`prediction_target_xor`). У **б
 Моя рекомендация — **(C)**, но решение за владельцем. Не приступай к
 записи, пока он не выбрал.
 
+## Инструменты варианта C (реализовано 2026-09-26)
+
+Именно этот путь выбран: схему не меняем, провенанс — immutable-файл до матча.
+
+```bash
+# 1) ДО матча: заморозить features и вероятность (cutoff = now)
+python scripts/prospective_freeze.py --team-a "<название>" --team-b "<название>"
+#   → artifacts/prospective/<freeze_id>.json (не перезаписывается)
+
+# 2) ПОСЛЕ матча: дотащить источник и нормализовать
+python scripts/ingest_opendota_once.py --head
+python scripts/normalize_once.py
+
+# 3) Связать заморозку с доигранной game1
+python scripts/prospective_reconcile.py --all
+#   pending → игры ещё нет / map index не доказан (серия не закрыта)
+#   reconciled → canonical-снимок prospective_observed + оценка
+```
+
+Ограничения инструмента: целевая игра — **game1** (`map_number = 1`);
+пока серия не закрыта в данных, связывание ждёт. Freeze-файл не
+перезаписывается даже после reconcile (дописывается только блок
+`reconciled_with`).
+
 ## Чего делать нельзя (правила проекта)
 
 - Не использовать данные с `available_at > cutoff`. Финальная статистика и

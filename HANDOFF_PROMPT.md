@@ -183,15 +183,66 @@ evidence — шаблонное с `template`-id (LLM нет), purity-прове
 (варианты A/B/C см. `docs/agent/AGENT_PROSPECTIVE_WALLACHIA.md`) —
 архитектурное решение за владельцем.
 
+### Реализован вариант C: freeze → reconcile (2026-09-26, вечер)
+
+Владелец дал ход («го»), выбран рекомендованный вариант **C** — схему не
+меняем, провенанс храним файлом до матча и связываем после.
+
+- `scripts/prospective_freeze.py` — строит features с `cutoff = now` для двух
+  канонических команд, применяет LR из артефакта и пишет **immutable** JSON в
+  `artifacts/prospective/<freeze_id>.json` (features + `p_a`/`p_b` + модель +
+  cutoff + канонический порядок Team A/B). Файл — единственное доказательство
+  того, что было известно до матча.
+- `scripts/prospective_reconcile.py` — после матча находит завершённую **game1**
+  между теми же командами с `event_time > cutoff`, пишет canonical-снимок в
+  режиме `prospective_observed` (`assumed_available_at IS NULL`) и оценку
+  (`record_evaluation`, `metric_definition_version` по умолчанию).
+- `src/d2intel/api/snapshots.py` — добавлен `PROSPECTIVE_MODE` и параметры
+  режима; `write_feature_snapshot` теперь **явно отвергает** сочетание
+  `prospective_observed` + `assumed_available_at` (иначе нарушался
+  `feature_snapshot_lag_policy`), для ретро-режима поведение не изменилось.
+
+**Реальный прогон:** заморозка `ce679e76` — Natus Vincere vs Aurora Gaming,
+cutoff `2026-09-26T14:58:15Z`, **p_a = 0.4688** (Na'Vi — Team A по каноническому
+порядку). `prospective_reconcile.py --all` → `pending`: игры после cutoff в БД
+ещё нет (последняя игра `2026-09-26 13:45 +03`). Связывание произойдёт, когда
+матч доиграют и он появится в источнике; доигранные игры 25–26 Sep между этими
+командами пока `map_index_unresolved` (серия не закрыта) — их скрипт
+**не** связывает, потому что map1 не доказана.
+
+**Найдено и исправлено в чужом незавершённом коде:** (1) reconcile писал
+`prediction_evaluation` своим INSERT без `metric_definition_version` (NOT NULL в
+схеме) с неверным `ON CONFLICT` — заменён на идемпотентный `record_evaluation`;
+(2) `prospective_observed` получал `assumed_available_at = cutoff` вместо NULL —
+вставка упала бы на constraint.
+
+**Нюанс для владельца:** целевая игра должна быть **game1**. Пока серия не
+закрыта в наших данных, `map_number` остаётся NULL и reconcile честно ждёт —
+это следствие правила «неполная серия не получает номеров карт», а не баг.
+
+**Проверки:** `ruff src tests scripts` — 6 старых `UP038` (новых нет);
+`mypy src` — 4 старых union-attr (новых нет); `mypy` новых скриптов — чисто;
+`pytest` безопасного набора (без деструктивных `test_migrations`/
+`test_constraints`) — **357 passed** (+6 новых `tests/api/test_prospective.py`:
+запрет assumed в prospective, NULL в снимке, ретро-режим не сломан, reconcile
+находит game1, pending при отсутствии игры, отказ при недоказанном map index).
+Схема БД не менялась. Runtime-код API менялся (`snapshots.py`) — для
+prospective-пути используется только из скриптов, перезапуск сервера не
+обязателен, но желателен перед следующими вызовами `/predict`.
+
 - CURRENT EPIC: `EPIC 12 — Prediction API`
-- CURRENT TASK: prospective-прогон Wallachia — **заблокирован решением
-  владельца** (нет источника будущих матчей; нужен выбор схемы цели).
-  Сам API-001 и head-sync выполнены.
-- NEXT ACTION: владелец выбирает способ фиксации prospective-цели (A —
-  миграция схемы, B — research-артефакт без canonical-записи,
-  C — рекомендовано: immutable-файл features+p_a до матча + связывание
-  после), ИЛИ называет иную задачу (`UI-001` и т.д.).
-- После этого: **остановиться и ждать команды владельца**
+- CURRENT TASK: prospective-прогон Wallachia — **вариант C реализован**;
+  заморозка `ce679e76` (Na'Vi vs Aurora, p_a 0.4688) ждёт появления
+  доигранной game1 в источнике. API-001 и head-sync выполнены.
+- NEXT ACTION: когда матч доиграют — `python scripts/ingest_opendota_once.py
+  --head` (или обычный прогон) → `python scripts/normalize_once.py` →
+  `python scripts/prospective_reconcile.py --all`, затем честный отчёт
+  (попал/не попал, log_loss, brier). Пока матч не доигран — **ждать**;
+  публиковать 33 незапушенных коммита (включая merge
+  `feat/first-intelligence-dashboard`) — только по команде владельца.
+- Решение о варианте C зафиксировано рабочим кодом; если владелец хочет
+  сделать prospective-цель частью схемы постоянно — нужен отдельный ADR
+  (вариант A), сам собой он не появится.
 
 ## Продуктовые ориентиры и gates
 

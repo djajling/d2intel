@@ -39,6 +39,11 @@ PREDICTION_TEMPLATE_EVIDENCE_VERSION = "template.v1"
 # Метка ретроспективного режима — единственный доступный на ретро-контуре.
 RETROSPECTIVE_MODE = "retrospective_reconstructed"
 
+#: Режим «реально знали в момент cutoff»: признаки и вероятность зафиксированы
+#: до результата. Схема (constraint `feature_snapshot_lag_policy`) запрещает
+#: в этом режиме `assumed_available_at` — реконструкция задержки не нужна.
+PROSPECTIVE_MODE = "prospective_observed"
+
 INSERT_FEATURE_SNAPSHOT = """
     INSERT INTO feature_snapshot (
         target_type, target_game_id, cutoff_at, evaluation_mode,
@@ -190,13 +195,25 @@ def write_feature_snapshot(
     feature_columns: list[str],
     feature_schema_version: str,
     lag_policy_version: str,
-    assumed_available_at: datetime,
+    assumed_available_at: datetime | None = None,
+    evaluation_mode: str = RETROSPECTIVE_MODE,
 ) -> UUID:
     """Записать immutable feature_snapshot и вернуть его id.
 
     Идемпотентно по `content_hash`: повторный вызов с теми же значениями
     переиспользует существующую запись, а не создаёт дубликат.
+
+    `evaluation_mode = 'prospective_observed'` требует `assumed_available_at
+    IS NULL` (constraint `feature_snapshot_lag_policy`): в этом режиме
+    реконструкция задержки не нужна, признаки были реально известны в
+    момент cutoff. Передавайте `assumed_available_at=None` явно — иначе
+    будет ошибка, а не «тихо подставим cutoff».
     """
+    if evaluation_mode == PROSPECTIVE_MODE and assumed_available_at is not None:
+        raise ValueError(
+            "prospective_observed требует assumed_available_at = None: "
+            "задержка не реконструируется, признаки были известны в cutoff"
+        )
     values = {column: feature_row.get(column) for column in feature_columns}
     coverage = _coverage_masks(feature_row, feature_columns)
     content_hash = _content_hash(values, coverage)
@@ -212,7 +229,7 @@ def write_feature_snapshot(
         {
             "game_id": str(game_id),
             "cutoff_at": cutoff_at,
-            "evaluation_mode": RETROSPECTIVE_MODE,
+            "evaluation_mode": evaluation_mode,
             "values_json": _to_json(values),
             "coverage_json": _to_json(coverage),
             "feature_schema_version": feature_schema_version,
@@ -237,6 +254,8 @@ def write_prediction_snapshot(
     evaluation_mode: str,
     feature_row: dict[str, Any],
     feature_columns: list[str],
+    assumed_available_at: datetime | None = None,
+    event_time: datetime | None = None,
 ) -> dict[str, Any]:
     """Полный immutable снимок: цель + feature_snapshot + prediction_snapshot.
 
@@ -245,7 +264,19 @@ def write_prediction_snapshot(
     скриптам обучения (перезапуск не дублирует), а сервис предсказывает по
     запросу, и каждый запрос — отдельное вычисление со своим `snapshot_seq`.
     Поэтому идемпотентный путь здесь не используется.
+
+    `assumed_available_at=None` + `evaluation_mode='prospective_observed'` —
+    режим prospective-reconcile: признаки были реально известны в cutoff,
+    поэтому assumed-время не подставляется (иначе нарушается
+    `feature_snapshot_lag_policy`).
     """
+    if assumed_available_at is not None:
+        resolved_assumed: datetime | None = assumed_available_at
+    elif evaluation_mode == PROSPECTIVE_MODE:
+        resolved_assumed = None
+    else:
+        resolved_assumed = cutoff_at
+
     feature_snapshot_id = write_feature_snapshot(
         session,
         game_id=game_id,
@@ -254,7 +285,8 @@ def write_prediction_snapshot(
         feature_columns=feature_columns,
         feature_schema_version=model_version["feature_schema_version"],
         lag_policy_version=model_version.get("lag_policy_version", "lag-policy.v1"),
-        assumed_available_at=cutoff_at,
+        assumed_available_at=resolved_assumed,
+        evaluation_mode=evaluation_mode,
     )
 
     prediction_id = upsert_prediction(
@@ -271,6 +303,8 @@ def write_prediction_snapshot(
         cutoff_at=cutoff_at,
         feature_snapshot_id=feature_snapshot_id,
         p_a=p_a,
+        evaluation_mode=evaluation_mode,
+        event_time=event_time if event_time is not None else cutoff_at,
     )
     return {
         "prediction_id": str(prediction_id),
@@ -304,6 +338,8 @@ def _append_service_snapshot(
     cutoff_at: datetime,
     feature_snapshot_id: UUID,
     p_a: float,
+    evaluation_mode: str = RETROSPECTIVE_MODE,
+    event_time: datetime | None = None,
 ) -> UUID:
     """Новый снимок на каждый вызов сервиса — отдельный `snapshot_seq`.
 
@@ -337,12 +373,12 @@ def _append_service_snapshot(
             "model_version_id": model_version_id,
             "feature_snapshot_id": feature_snapshot_id,
             "p_a": p_a,
-            "evaluation_mode": RETROSPECTIVE_MODE,
+            "evaluation_mode": evaluation_mode,
             "state_hash": state_hash,
             "idempotency_key": (
                 f"service:{game_id}:model:{model_version_id}:seq:{snapshot_seq}"
             ),
-            "event_time": cutoff_at,
+            "event_time": event_time if event_time is not None else cutoff_at,
         },
     ).scalar_one()
     return UUID(str(row))
@@ -459,6 +495,7 @@ def build_template_evidence(
 __all__ = [
     "EvidenceItem",
     "PREDICTION_TEMPLATE_EVIDENCE_VERSION",
+    "PROSPECTIVE_MODE",
     "PredictionResponse",
     "RETROSPECTIVE_MODE",
     "build_template_evidence",
