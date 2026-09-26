@@ -1,0 +1,49 @@
+{
+  "n": 140,
+  "metrics": {
+    "accuracy": 0.5571428571428572,
+    "log_loss": 0.6825891904843736,
+    "brier": 0.2448166341835455,
+    "expected_calibration_error": 0.016798720806903106,
+    "log_loss_uniform": 0.6931471805599453,
+    "majority_floor": 0.5285714285714286
+  },
+  "bootstrap_log_loss_by_series": {
+    "point": 0.6825891904843736,
+    "low": 0.6585100353261353,
+    "high": 0.7074021898670164,
+    "n": 140,
+    "n_groups": 140
+  },
+  "bootstrap_log_loss_by_time": {
+    "point": 0.6825891904843736,
+    "low": 0.6366787436169404,
+    "high": 0.7060905676948533,
+    "n": 140,
+    "n_groups": 8
+  },
+  "bootstrap_brier_by_series": {
+    "point": 0.2448166341835455,
+    "low": 0.2329757629514545,
+    "high": 0.25690252503379163,
+    "n": 140,
+    "n_groups": 140
+  },
+  "n_series": 140,
+  "n_time_buckets": 8,
+  "verdict": {
+    "outcome": "insufficient evidence",
+    "threshold_accuracy": 0.7,
+    "prd_reference": "docs/PRD.md §5 G-MODEL (accuracy ≥ 0.70 per-game, frozen test); ADR-007",
+    "threshold_met": false,
+    "volume_ok": true,
+    "sample_note": "sample 140 >= 30, но значимость не заявляется без отдельного решения",
+    "no_significance_claim": "Заявления о статистической значимости не делаются: интервалы bootstrap — описание неопределённости, не тест гипотезы."
+  },
+  "model": {
+    "algorithm": "logreg_prior_form (champion)",
+    "chosen_c": 0.01,
+    "protocol": "идентичен ML-001/ML-002: μ на train, C по min valid log_loss",
+    "split_manifest": "docs\\frozen_split_2026-09-26.json"
+  }
+}

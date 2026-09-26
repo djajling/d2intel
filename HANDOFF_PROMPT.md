@@ -293,6 +293,13 @@ prospective-пути используется только из скриптов
   guard корректно отказал прогону v1 (когорта выросла), расширение проверено запросами
   (131/131 исходных test-игр в test). Покрытие player-признаков на test уже 104/140
   (74%) — backfill продолжается. Отчёт: `docs/CHALLENGER.md`, `docs/ml/ML002_run_2026-09-26.json`.
+- **EVAL-001 выполнен (2026-09-26):** `evaluation/outcomes.py` + `scripts/evaluate_outcomes.py`;
+  итоговая оценка champion LR на frozen test v2 (n=140): accuracy 0.5571, log_loss 0.6826,
+  Brier 0.2448, ECE 0.0168; bootstrap по сериям и по времени; вердикт **insufficient
+  evidence** (порог G-MODEL 0.70 не достигнут). Отчёт: `docs/OUTCOME_EVAL.md`/.json.
+  Итог дня по ML-слою: challenger не обошёл LR, champion остаётся LR, гейт не пройден —
+  честно зафиксировано; следующие рычаги — покрытие player-признаков (backfill),
+  расширение фич (PATCH-002/TEAM-002) и калибровка (CAL-002/003).
 - Остатки из старых секций ниже (запись 09-23) читать с учётом этого: публиковать
   больше нечего, все коммиты в `origin/main`.
 - CURRENT EPIC: `EPIC 12 — Prediction API`

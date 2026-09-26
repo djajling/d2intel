@@ -1004,7 +1004,7 @@
 - **EPIC:** 10 — Baseline ML
 - **STAGE:** MVP
 - **PRIORITY:** P1
-- **STATUS:** Planned
+- **STATUS:** Done (2026-09-26). `src/d2intel/evaluation/outcomes.py` (accuracy/log_loss/Brier/**ECE**, grouped bootstrap по сериям **и по времени** (ISO-недели), вердикт `sufficient evidence` / `insufficient evidence` с ссылкой на порог PRD G-MODEL 0.70, без significance-заявлений) + `scripts/evaluate_outcomes.py` (champion LR, протокол идентичен ML-001/ML-002). Отчёт: `docs/OUTCOME_EVAL.md` + `OUTCOME_EVAL.json` — n=140, accuracy 0.5571, log_loss 0.6826, Brier 0.2448, ECE 0.0168; вердикт **insufficient evidence** (порог 0.70 не достигнут, объём достаточен). Отклонения от карточки: (1) CAL-002 не входила — ECE как диагностика, калибровка отдельным этапом; (2) `src/eval/outcomes.py` → `src/d2intel/evaluation/outcomes.py` (layout репозитория); чтение test в рамках EVAL-001 — подбор не выполнялся (C на valid).
 - **GOAL:** Дать итоговую оценку исходов модели на frozen untouched test **до** метрик-гейта, с корректной неопределённостью и правилом «недостаточно доказательств».
 - **CONTEXT:** Оценка исходов должна предшествовать метрикс-гейту: без неё гейт `MON-001` не имеет основания. На малых выборках (в т.ч. 30 наблюдений) **нельзя** заявлять значимость. Frozen test считается достаточным только если достигает точности, **заранее выбранной в PRD**.
 - **INPUT:** `ML-002`, `CAL-002`.
