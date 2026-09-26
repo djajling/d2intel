@@ -258,6 +258,12 @@ prospective-пути используется только из скриптов
   на выделенной `d2intel_test`: **379 passed** (Python 3.11.9). Оставшиеся 26
   mypy-ошибок в `scripts/build_prior_form_dataset.py` — отдельная задача (в CI
   `mypy` гоняет только `src`).
+- **ADR-006 закрыт вердиктом владельца (2026-09-26): вариант C.** Gate-1 = pre-draft/карта 1
+  (MVP — вся текущая реализация легализована), Gate-2 = post-draft/карта N отдельным гейтом
+  (его prospective — только после G-LIVE). `docs/PRD.md` v1: §1 разделён на фазы, cutoff по
+  гейтам, G-OPS-знаменатели, закрытый список target_type/phase_contract; PRODUCT/BACKLOG §1
+  п.6/README/site согласованы; сталые цитаты внутри ADR-006 исправлены. Из открытых решений
+  владельца остаётся **ADR-007** (порог приёмки модели 0.70, Proposed при уже обученном ML-001).
 - Остатки из старых секций ниже (запись 09-23) читать с учётом этого: публиковать
   больше нечего, все коммиты в `origin/main`.
 - CURRENT EPIC: `EPIC 12 — Prediction API`
@@ -302,7 +308,7 @@ reconcile это терпимо, но при росте истории потр�
 
 Статусы решений проверять в `docs/PRD.md` и соответствующих ADR; перечисление стека не переводит Proposed ADR в Accepted.
 
-1. Цель прогноза MVP: **P(Team A выигрывает первую карту серии | карта сыграна), до драфта** — не исход всей серии.
+1. Цель прогноза MVP (Gate-1, вердикт ADR-006 2026-09-26 — вариант C): **P(Team A выигрывает карту 1 | карта сыграна), до драфта** — не исход всей серии; Gate-2 — post-draft/карта N отдельным гейтом, prospective только после G-LIVE (`docs/PRD.md` §1 v1).
 2. **Snapshots и temporal-версии — с первого прототипа**, а не в MVP 2.
 3. Стек: Python-монолит + PostgreSQL (typed canonical + JSONB raw/snapshots) + FastAPI + pandas; Logistic Regression как baseline, CatBoost — challenger, **не обязанный победить**; без Redis/Celery/Kafka/Kubernetes/feature store.
 4. Источники: OpenDota history — основная ставка; Liquipedia API — только после gate по правам/доступу/покрытию; PandaScore — исключён до письменного разрешения провайдера (проект содержит market-анализ).

@@ -1,21 +1,38 @@
 # PRD-001 — Product Specification v0
 
-**Статус:** Утверждён владельцем (2026-09-21)
+**Статус:** Утверждён владельцем (2026-09-21); пересмотрен 2026-09-26 по вердикту [ADR-006](adr/ADR-006-target-and-phase.md) — вариант C
 **Следующая точка входа:** SRC-001
 
 ---
 
 ## 1. Цель прогноза
 
-**Единица прогноза:** `P(Team A выигрывает карту N | карта N сыграна, полный драфт завершён)`
+**Вердикт владельца (2026-09-26, ADR-006 Accepted, вариант C): две фазы, pre-draft первая.**
+
+### Gate-1 (MVP): pre-draft, карта 1
+
+**Единица прогноза:** `P(Team A выигрывает карту 1 | карта 1 сыграна)` — расчёт **до начала драфта** целевой карты.
 
 - Team A — канонический ID, фиксируется при создании fixture, не меняется.
 - `P(Team B) = 1 − P(Team A)` — бинарный исход.
-- **Момент расчёта:** после полного драфта (все 10 пиков + баны). Частичный драфт → abstention.
+- Сомнительный статус «до драфта» → abstention.
+- Проспективная проверка возможна без live-фида: ручной freeze до матча → reconcile после
+  (`scripts/prospective_freeze.py` / `prospective_reconcile.py`, вариант C).
+
+### Gate-2 (отдельный gate после Gate-1): post-draft, карта N
+
+**Единица прогноза:** `P(Team A выигрывает карту N | карта N сыграна, полный драфт завершён)` —
+отдельный датасет, драфтовые фичи (первый шаг — композиция героев из `game_participant`;
+порядок пиков/банов — отдельная задача через `/explorer`, в `/matches/{id}` `draft_timings`
+пуст) и **свой знаменатель G-OPS**.
+
+**G-LIVE — предварительное условие проспективного Gate-2, а не поздний эпик:** драфт
+фиксируется за минуты до старта карты, ручная заморозка в это окно невозможна.
+Ретроспективный Gate-2 от G-LIVE не зависит.
 
 ### Серийная вероятность (производная)
 
-`P(Team A выигрывает серию)` вычисляется математически из per-game вероятностей и текущего счёта — без отдельно обученной модели.
+`P(Team A выигрывает серию)` вычисляется математически из per-game вероятностей и текущего счёта — без отдельно обученной модели. Полноценно определяется на Gate-2 (post-draft per-map p); в Gate-1 не входит.
 
 ```
 BO3 (0-0): P = p² + 2p²(1−p)
@@ -34,6 +51,19 @@ Per-game `p` обновляется после каждого нового др�
 | BO1 | 1 | 1 |
 | BO3 | 3 | 1–3 |
 | BO5 | 5 | 1–5 |
+
+### Закрытый список target_type / forecast_phase (приёмка ADR-006 п.4)
+
+Владелец каждого гейта — владелец проекта (вердикт вручную, автоматического прохождения нет).
+
+| Цель | `prediction.target_type` | `prediction.phase_contract` | Gate | Знаменатель G-OPS | Prospective |
+|---|---|---|---|---|---|
+| Карта 1 до драфта | `game` | `pre_draft` | Gate-1 (MVP) | 30 sequential eligible game1 fixtures | freeze → reconcile, без live-фида |
+| Карта N после драфта | `game` | `post_draft` | Gate-2 | 30 sequential eligible game fixtures | только после G-LIVE |
+| Серия | — | — | производная, не gate | — | не gate |
+
+Расширение списка — только через новый ADR. Значения соответствуют коду
+(`src/d2intel/models/repository.py`: `target_type='game'`, `phase_contract` по умолчанию `pre_draft`).
 
 ---
 
@@ -58,7 +88,9 @@ immutability снимков, словарь меток, маски доступ�
 ## 3. Правила cutoff
 
 1. Прогноз использует только данные с `available_at ≤ cutoff_at`.
-2. `cutoff_at` = момент фиксации complete draft.
+2. `cutoff_at`: **Gate-1** — момент до начала драфта целевой карты (prospective — момент
+   freeze; ретроспективно аппроксимируется событиями строго раньше `event_time`).
+   **Gate-2** — момент фиксации complete draft.
 3. Финальная статистика карты (KDA, GPM, итог) **запрещена** до матча.
 4. Фактический ростер целевой карты — только `prior_known_roster` с `roster_status`.
 5. Hero winrate / patch meta — только с as-of фильтром.
@@ -89,7 +121,7 @@ immutability снимков, словарь меток, маски доступ�
 | G-SRC-UPC | Liquipedia API: legal + timestamps + identity mapping; не scraping | Остаться на ретроспективе |
 | G-PURITY | Critical cutoff violations = 0; ambiguous identity в eval = 0 | Блокирует quality gate |
 | G-ROSTER | Качество prior roster достаточно | Расширить fallback |
-| G-OPS | Coverage ≥ 90% на фиксированных 30 sequential eligible game fixtures | Сузить scope |
+| G-OPS | Coverage ≥ 90% на заранее фиксированном знаменателе: Gate-1 — 30 sequential eligible **game1** fixtures; Gate-2 — отдельный знаменатель (30 sequential eligible game fixtures) | Сузить scope |
 | G-MODEL | **Accuracy ≥ 70% per-game на frozen test**; Brier/log-loss/ECE; CI по сериям | LR остаётся champion; малая выборка → insufficient evidence |
 | G-FRESH | Source lag + ingestion lag измерены; SLO per field утверждён | Gate не закрыт |
 | G-REL | Повторный запуск не меняет старые snapshots; crash recovery OK | Доработка |
@@ -123,6 +155,7 @@ immutability снимков, словарь меток, маски доступ�
 |---|---|---|
 | v0 | 2026-09-21 | bo1/bo3/bo5 scope; post-draft trigger; 70% per-game gate; derived series probability |
 | v0.1 | 2026-09-21 | ссылка на утверждённую спеку временной семантики `PRD-003` / `docs/PRD_TEMPORAL.md` |
+| v1 | 2026-09-26 | вердикт владельца по ADR-006 (вариант C): Gate-1 = pre-draft/карта 1 (MVP), Gate-2 = post-draft/карта N (prospective — только после G-LIVE); §1 разделён на две фазы, добавлен закрытый список target_type/phase_contract, G-OPS разделён по гейтам; серийная вероятность отнесена к Gate-2 |
 
 ---
 

@@ -37,9 +37,11 @@
 
 `ADR-001` (database) и `ADR-005` (prediction snapshots) — **Accepted** (утверждены владельцем 2026-09-21, реализация — `DB-001`); `ADR-002`…`ADR-004`, `ADR-006` (цель прогноза) и `ADR-007` (порог приёмки модели) — Proposed. Product spec v0 (`docs/PRD.md`) и временная семантика (`docs/PRD_TEMPORAL.md`) утверждены владельцем. Внутренние task IDs ссылаются на BACKLOG.md; для выполненных задач пути FILES EXPECTED TO CHANGE соответствуют реально созданным файлам.
 
-**Открытое расхождение:** утверждённый `docs/PRD.md` задаёт цель «карта N после полного драфта»,
-а `PRODUCT.md`, `BACKLOG.md §1 п.6` и `FIRST_10_TASKS.md` — «первая карта до драфта». Выбор
-выносится на вердикт владельца в [ADR-006](docs/adr/ADR-006-target-and-phase.md).
+**Цель прогноза (вердикт ADR-006, 2026-09-26 — Accepted, вариант C):** Gate-1 (MVP) —
+pre-draft, карта 1; Gate-2 — post-draft, карта N отдельным гейтом, его проспективный продукт
+требует G-LIVE. Ранее открытое расхождение между `docs/PRD.md` и корневыми документами
+устранено; единица прогноза, cutoff и закрытый список target_type/phase_contract — в
+[`docs/PRD.md` §1](docs/PRD.md) (v1).
 
 ## Главные выводы
 
