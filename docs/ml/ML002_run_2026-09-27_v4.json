@@ -1,0 +1,122 @@
+{
+  "manifest": "docs\\ml\\ML002_manifest.json",
+  "model": {
+    "algorithm": "catboost_prior_form",
+    "feature_schema_version": "prior-form.v1",
+    "n_train": 3360,
+    "n_valid": 110,
+    "n_test": 140,
+    "model_version_id": "da4935da-2f6f-422e-9a6b-6962b8b188c2",
+    "coverage_train": {
+      "team_a_avail": 2794,
+      "player_a_avail": 858,
+      "n": 3360
+    },
+    "coverage_test": {
+      "team_a_avail": 107,
+      "player_a_avail": 104,
+      "n": 140
+    }
+  },
+  "selection": {
+    "rule": "min log_loss на valid",
+    "grid_results": [
+      {
+        "depth": 3,
+        "learning_rate": 0.03,
+        "valid_log_loss": 0.7074891213440491
+      },
+      {
+        "depth": 3,
+        "learning_rate": 0.1,
+        "valid_log_loss": 0.7234640703588179
+      },
+      {
+        "depth": 5,
+        "learning_rate": 0.03,
+        "valid_log_loss": 0.7094845047976539
+      },
+      {
+        "depth": 5,
+        "learning_rate": 0.1,
+        "valid_log_loss": 0.7635873764725968
+      }
+    ],
+    "chosen": {
+      "depth": 3,
+      "learning_rate": 0.03,
+      "valid_log_loss": 0.7074891213440491
+    },
+    "untouched_test_role": "итоговый гейт; test не читается при выборе параметров и при решении о промо"
+  },
+  "patch_weighting": {
+    "version": "patch-weight.v2",
+    "chosen_decay": 0.6,
+    "decay_selection_report": [
+      {
+        "patch_decay": 0.6,
+        "valid_log_loss_lr_best": 0.7034538879713405
+      }
+    ],
+    "weight_by_distance": {
+      "d=0": 1.0,
+      "d=1": 0.6,
+      "d=2": 0.36,
+      "d=3": 0.21599999999999997,
+      "d=4": 0.1296
+    },
+    "unknown_patch_weight": 0.6
+  },
+  "baseline_lr": {
+    "algorithm": "logreg_prior_form",
+    "chosen_c": 0.01,
+    "test": {
+      "n": 140,
+      "accuracy": 0.55,
+      "log_loss": 0.71850018304249,
+      "brier": 0.2582865087451811,
+      "log_loss_uniform": 0.6931471805599453,
+      "majority_floor": 0.5285714285714286,
+      "bootstrap_log_loss": {
+        "point": 0.71850018304249,
+        "low": 0.6809141174163734,
+        "high": 0.7652533951900097,
+        "n": 140,
+        "n_groups": 140
+      }
+    }
+  },
+  "test_challenger": {
+    "n": 140,
+    "accuracy": 0.5,
+    "log_loss": 0.7010362898511281,
+    "brier": 0.2538542616656281,
+    "log_loss_uniform": 0.6931471805599453,
+    "majority_floor": 0.5285714285714286,
+    "bootstrap_log_loss": {
+      "point": 0.7010362898511281,
+      "low": 0.6789688659506721,
+      "high": 0.7226111456532984,
+      "n": 140,
+      "n_groups": 140
+    },
+    "predictions_written": 140,
+    "snapshots_written": 140,
+    "evaluations_written": 140
+  },
+  "paired_diff_log_loss": {
+    "n_boot": 2000,
+    "mean_diff": -0.017395294806484697,
+    "ci95_lower": -0.056303516555297924,
+    "ci95_upper": 0.016137264195329657,
+    "note": "отрицательное = challenger лучше baseline по log_loss"
+  },
+  "acceptance": {
+    "threshold_accuracy": 0.7,
+    "measured_accuracy": 0.5,
+    "threshold_met": false,
+    "note": "Порог — цель приёмки ADR-007 для прогонов после вердикта; недостижение фиксируется честно, подбор под test запрещён. Повышение до champion — решение владельца; по умолчанию LR остаётся."
+  },
+  "sample_verdict": "sample 140 >= 30, но значимость не заявляется без отдельного решения",
+  "dry_run": false
+}
