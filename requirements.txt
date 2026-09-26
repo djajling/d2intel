@@ -22,6 +22,7 @@ psycopg[binary]==3.2.3
 # --- Dataframe / ML ---
 pandas==2.2.3
 scikit-learn==1.6.1
+catboost==1.2.10
 # numpy и joblib импортируются кодом напрямую (src/d2intel/api/predict.py,
 # src/d2intel/api/snapshots.py); фиксируем версии, с которыми проверен прогон.
 numpy==2.4.6

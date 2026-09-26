@@ -1,0 +1,56 @@
+{
+  "manifest_version": "ml002-manifest.v1",
+  "task_id": "ML-002",
+  "purpose": "CatBoost challenger (CPU) на том же протоколе, что LR ML-001; сравнение с неопределённостью; untouched test — только итоговый гейт.",
+  "fixed_at": "2026-09-26",
+  "algorithm": "catboost_prior_form",
+  "library": { "name": "catboost", "version": "1.2.10" },
+  "device": { "task_type": "CPU", "seed": 17, "thread_count": 4 },
+  "features": {
+    "schema_version": "prior-form.v1",
+    "columns": [
+      "d_team_wr_lifetime",
+      "d_team_wr_last_long",
+      "d_team_wr_last_short",
+      "d_team_n_eff",
+      "d_team_days_since_last",
+      "d_player_wr",
+      "d_player_kda",
+      "d_player_gpm",
+      "d_player_xpm"
+    ],
+    "builder": "PriorFormBuilder(evaluation_mode=event_asof), выравнивание в канонические координаты когорты (team_a_id < team_b_id)",
+    "nan_policy": "CatBoost обучается на NaN нативно (без импутации) — отличие от LR, который импутирует нулём дифференциала; обе политики зафиксированы здесь до обучения",
+    "mu_fit": "PriorFormParams.fit строго на train-метках когорты до сборки датасета (AC ML-001 #4)"
+  },
+  "data": {
+    "split_manifest": "docs/frozen_split_2026-09-22.json",
+    "split_content_hash": "eb4787083a560cd79246161414b24348cb80cd6ece98ade05ba8c91efa0f8ce0",
+    "frozen_counts": { "train": 3212, "valid": 110, "test": 131 },
+    "note": "Состав когорты и метки заморожены; покрытие player-признаков может отличаться от прогона ML-001 (backfill идёт) — фактическое покрытие фиксируется в отчёте прогона. Отклонение от карточки: PATCH-002/TEAM-002 не входят — challenger обучается на том же наборе из 9 prior-form признаков, что LR, чтобы сравнение было честным; расширение признаков — будущий прогон с новым manifest."
+  },
+  "param_grid": {
+    "iterations": [300],
+    "depth": [3, 5],
+    "learning_rate": [0.03, 0.1],
+    "l2_leaf_reg": [3.0],
+    "loss_function": "Logloss",
+    "allow_writing_files": false,
+    "verbose": false
+  },
+  "selection": {
+    "rule": "min log_loss на valid",
+    "tuning_folds": "только valid-сегмент замороженного сплита",
+    "untouched_test_role": "итоговый гейт; test не читается при выборе параметров и при решении о промо"
+  },
+  "acceptance": {
+    "threshold_accuracy": 0.70,
+    "basis": "ADR-007 (Accepted 2026-09-26): порог — цель приёмки для прогонов после вердикта",
+    "miss_rule": "вердикт «порог не достигнут, значение X [интервал]»; модель не подгоняется под порог"
+  },
+  "comparison": {
+    "baseline": "logreg_prior_form, переобучается в этом же прогоне с идентичным протоколом (seed 17, C-грид 0.01/0.1/1/10, выбор min valid log_loss) — чтобы парное сравнение было в рамках одного прогона",
+    "paired_test": "grouped bootstrap (по сериям) парной разницы log_loss challenger − baseline",
+    "promotion": "champion — отдельное решение владельца; по умолчанию LR остаётся champion"
+  }
+}
