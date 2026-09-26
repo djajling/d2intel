@@ -1,0 +1,25 @@
+{
+  "spec": {
+    "valid_from": "2026-06-24T19:33:07.600000+03:00",
+    "test_from": "2026-08-08T16:26:50.800000+03:00",
+    "embargo_seconds": 86400.0
+  },
+  "counts": {
+    "train": 3360,
+    "valid": 110,
+    "test": 140,
+    "excluded": 2
+  },
+  "segment_hashes": {
+    "train": "3f42b37820c8d81d217cc514b2aae46000d23e8c6d4b2cd592f79539c0e27460",
+    "valid": "0301a5be1d188cad8c0962b9e9264d0f73653b524396c4fe688afc78a2bc05b5",
+    "test": "3e7efc9541815aadabff03b86974c79f51207b0dd5344c78106d855a6ff506cb"
+  },
+  "content_hash": "7461035be4f914613495eaff9752994d783d19986c29b7483ee51262e4a70557",
+  "frozen_at": "2026-09-26T18:42:06.426826+00:00",
+  "supersedes": {
+    "manifest": "docs/frozen_split_2026-09-22.json",
+    "reason": "Состав когорты вырос после 09-22: (1) поздняя канонизация старых матчей (train 3212→3360, test-окно +1), (2) новые сыгранные матчи от head-sync (test +8). Границы spec сохранены байт-в-байт. Проверено прямыми запросами: все 131 игра исходного test (по снимкам ML-001 run_key eb478708) остались в test, ни одна не перетекла в train; выбор параметров по-прежнему только на valid; untouched-свойство исходного test сохранено как подмножество.",
+    "verified_ml001_test_games_still_in_test": 131
+  }
+}
