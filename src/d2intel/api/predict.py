@@ -32,6 +32,7 @@ from sqlalchemy.orm import Session
 
 from d2intel.api.snapshots import (
     PREDICTION_TEMPLATE_EVIDENCE_VERSION,
+    RETROSPECTIVE_MODE,
     PredictionResponse,
     build_template_evidence,
     write_prediction_snapshot,
@@ -435,3 +436,65 @@ def _params_from_hyperparameters(
     if prior_mean is not None:
         overrides["prior_mean"] = float(prior_mean)
     return PriorFormParams(**overrides)
+
+
+def compute_prediction(session: Session, game_id: UUID) -> PredictionResponse:
+    """Ядро инференса без HTTP-семантики: цель → фичи → purity → снимок.
+
+    Используется web-вьюхой UI-001. Последовательность повторяет
+    `predict_game`: HTTP-эндпоинт обязан различать коды ошибок по этапам
+    (400/503/404/500), вьюхе достаточно сообщения об ошибке. Коммит —
+    ответственность вызывающего: эндпоинт и вьюха управляют сессией сами.
+    """
+    target = _canonical_teams(session, game_id)
+    cutoff_at = target["event_time"]
+
+    model_version = _latest_model_version(session, algorithm="logreg_prior_form")
+    feature_columns = _feature_columns(model_version["hyperparameters"])
+    params = _params_from_hyperparameters(model_version["hyperparameters"])
+
+    feature_row, x = _build_features(session, target, params, feature_columns)
+    _assert_purity(
+        feature_row,
+        cutoff_at,
+        session,
+        (target["team_a_id"], target["team_b_id"]),
+        params,
+    )
+
+    model = _load_model(model_version["artifact_uri"])
+    p_a = float(model.predict_proba(_impute(x))[0][1])
+
+    result = write_prediction_snapshot(
+        session,
+        game_id=game_id,
+        team_a_id=target["team_a_id"],
+        team_b_id=target["team_b_id"],
+        model_version=model_version,
+        cutoff_at=cutoff_at,
+        p_a=p_a,
+        evaluation_mode=RETROSPECTIVE_MODE,
+        feature_row=feature_row,
+        feature_columns=feature_columns,
+    )
+    return PredictionResponse(
+        prediction_id=result["prediction_id"],
+        snapshot_id=result["snapshot_id"],
+        model_version_id=str(model_version["id"]),
+        algorithm=model_version["algorithm"],
+        feature_schema_version=model_version["feature_schema_version"],
+        cutoff_at=cutoff_at.isoformat(),
+        evaluation_mode=RETROSPECTIVE_MODE,
+        target_phase=TARGET_PHASE,
+        lag_policy_version=LAG_POLICY_VERSION,
+        p_a=p_a,
+        p_b=1.0 - p_a,
+        evidence=build_template_evidence(
+            p_a=p_a,
+            feature_row=feature_row,
+            feature_columns=feature_columns,
+            model_version=model_version,
+            cutoff_at=cutoff_at.isoformat(),
+        ),
+        evidence_version=PREDICTION_TEMPLATE_EVIDENCE_VERSION,
+    )

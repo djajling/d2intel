@@ -1,8 +1,8 @@
 """Инициализация приложения: фабрика FastAPI.
 
-Минимальный сервер с health-маршрутом (INF-001) и prediction-эндпоинтом
-(API-001). Никаких фоновых задач — это локальный исследовательский
-инструмент.
+Минимальный сервер с health-маршрутом (INF-001), prediction-эндпоинтом
+(API-001) и server-rendered страницей матча (UI-001). Никаких фоновых
+задач — это локальный исследовательский инструмент.
 Запуск:
     uvicorn d2intel.app:app --reload --port 8000
 """
@@ -14,6 +14,7 @@ from fastapi import FastAPI
 from d2intel import __version__
 from d2intel.api.health import router as health_router
 from d2intel.api.predict import router as predict_router
+from d2intel.web.views import router as web_router
 
 
 def create_app() -> FastAPI:
@@ -28,6 +29,7 @@ def create_app() -> FastAPI:
     )
     app.include_router(health_router)
     app.include_router(predict_router)
+    app.include_router(web_router)
     return app
 
 

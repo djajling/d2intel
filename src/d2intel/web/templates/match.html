@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>d2intel — карта матча (ретроспектива)</title>
+<style>
+  :root { --ink:#15181e; --muted:#5b6270; --line:#d9dde5; --accent:#1d4ed8; --warn:#8a3b00; --ok:#166534; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:16px/1.55 "Segoe UI", system-ui, sans-serif; color:var(--ink); background:#f5f6f8; }
+  main { max-width: 880px; margin: 0 auto; padding: 24px 16px 64px; }
+  header.top { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+  .brand { font-weight:700; font-size:20px; letter-spacing:.5px; }
+  .mode-banner { background:var(--warn); color:#fff; font-weight:700; padding:6px 14px; border-radius:6px; font-size:13px; letter-spacing:.4px; }
+  .disclaimer { background:#fff7ed; border:1px solid #fed7aa; color:var(--warn); padding:12px 14px; border-radius:8px; margin:16px 0 24px; }
+  section.card { background:#fff; border:1px solid var(--line); border-radius:10px; padding:18px 20px; margin:0 0 18px; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  h2 { font-size:14px; text-transform:uppercase; letter-spacing:.8px; color:var(--muted); margin:0 0 12px; }
+  .teams { display:flex; align-items:center; justify-content:center; gap:24px; padding:8px 0; flex-wrap:wrap; }
+  .team { text-align:center; }
+  .team .name { font-weight:700; font-size:18px; }
+  .team .prob { font-size:34px; font-weight:700; color:var(--accent); margin-top:4px; }
+  .team .prob.unknown { color:var(--muted); font-size:22px; }
+  .vs { color:var(--muted); font-size:14px; }
+  .target-note { text-align:center; color:var(--muted); font-size:13px; margin-top:6px; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  td, th { border-top:1px solid var(--line); padding:7px 8px; text-align:left; vertical-align:top; }
+  tr:first-child td, tr:first-child th { border-top:none; }
+  th { color:var(--muted); font-weight:600; width:40%; }
+  .unknown { color:var(--muted); font-style:italic; }
+  .ok { color:var(--ok); font-weight:600; }
+  .miss { color:#b91c1c; font-weight:600; }
+  dl { display:grid; grid-template-columns: 40% 60%; gap:0; font-size:14px; margin:0; }
+  dt { color:var(--muted); padding:7px 8px; border-top:1px solid var(--line); }
+  dd { margin:0; padding:7px 8px; border-top:1px solid var(--line); word-break:break-all; }
+  dl dt:first-child, dl dd:first-child { border-top:none; }
+  button { background:var(--accent); border:none; color:#fff; padding:10px 18px; border-radius:8px; font-size:15px; cursor:pointer; }
+  footer { color:var(--muted); font-size:12px; margin-top:24px; }
+  code { background:#eef0f4; padding:1px 5px; border-radius:4px; font-size:13px; }
+</style>
+</head>
+<body>
+<main>
+  <header class="top">
+    <div class="brand">d2intel</div>
+    <div class="mode-banner">РЕТРОСПЕКТИВА · retrospective_reconstructed</div>
+  </header>
+
+  <p class="disclaimer">
+    Это <strong>реконструкция на исторических данных</strong>: прогноз вычислен post-hoc
+    по правилу as-of (cutoff = момент карты), а не был сделан до матча.
+    Это <strong>не живой прогноз</strong> и не рекомендация.
+  </p>
+
+  <h1>{{ team_a.name }} — {{ team_b.name }}{% if tournament_name %} · {{ tournament_name }}{% endif %}</h1>
+
+  <section class="card">
+    <h2>Предсказание (Gate-1: карта 1, до драфта)</h2>
+    <div class="teams">
+      <div class="team">
+        <div class="name">{{ team_a.name }} (Team A)</div>
+        {% if snapshot and snapshot.p_a is not none %}
+          <div class="prob">{{ "%.1f%%" | format(snapshot.p_a * 100) }}</div>
+        {% else %}<div class="prob unknown">нет снимка</div>{% endif %}
+      </div>
+      <div class="vs">против</div>
+      <div class="team">
+        <div class="name">{{ team_b.name }} (Team B)</div>
+        {% if snapshot and snapshot.p_b is not none %}
+          <div class="prob">{{ "%.1f%%" | format(snapshot.p_b * 100) }}</div>
+        {% else %}<div class="prob unknown">нет снимка</div>{% endif %}
+      </div>
+    </div>
+    <p class="target-note">P(Team A выигрывает карту 1 | карта сыграна) · Team A — канонический порядок (меньший ID), сторона Radiant/Dire не участвует</p>
+    {% if snapshot and snapshot.abstention_reason %}
+      <p class="target-note">Воздержание: {{ snapshot.abstention_reason }}</p>
+    {% endif %}
+  </section>
+
+  {% if snapshot %}
+  <section class="card">
+    <h2>Модель и версия</h2>
+    <dl>
+      <dt>Алгоритм</dt><dd>{{ snapshot.algorithm }}</dd>
+      <dt>Версия модели</dt><dd><code>{{ snapshot.model_version_id or "—" }}</code> · <code>{{ snapshot.run_key or "—" }}</code> · {{ snapshot.feature_schema_version }}</dd>
+      <dt>Артефакт (hash)</dt><dd><code>{{ snapshot.artifact_hash or "—" }}</code></dd>
+      <dt>Гиперпараметры</dt><dd>C = {{ snapshot.c or "—" }} · n_train = {{ snapshot.n_train or "—" }} · prior_mean = {{ snapshot.prior_mean or "—" }}</dd>
+      <dt>Lag policy</dt><dd>{{ snapshot.lag_policy_version or "—" }}</dd>
+    </dl>
+  </section>
+
+  <section class="card">
+    <h2>Провенанс (что известно о происхождении данных)</h2>
+    <dl>
+      <dt>Источник данных</dt><dd>{{ source_name or "неизвестен" }}</dd>
+      <dt>Турнир</dt><dd>{{ tournament_name or "неизвестен" }}</dd>
+      <dt>Время карты (event_time)</dt><dd>{{ event_time or "—" }}</dd>
+      <dt>Cutoff прогноза</dt><dd>{{ snapshot.cutoff_at or "—" }}</dd>
+      <dt>Снимок рассчитан</dt><dd>{{ snapshot.computed_at or "—" }} · seq {{ snapshot.snapshot_seq }}</dd>
+      <dt>Режим оценки</dt><dd><code>{{ snapshot.evaluation_mode }}</code>{% if snapshot.assumed_available_at %} · assumed_available_at = {{ snapshot.assumed_available_at }}{% endif %}</dd>
+      <dt>Идентификаторы</dt><dd>prediction <code>{{ snapshot.prediction_id }}</code><br>snapshot <code>{{ snapshot.snapshot_id }}</code> · state_hash <code>{{ snapshot.state_hash }}</code></dd>
+    </dl>
+  </section>
+
+  <section class="card">
+    <h2>Покрытие признаков (неизвестное не подменяется нулём)</h2>
+    <dl>
+      <dt>История Team A ({{ team_a.name }})</dt><dd>{% if snapshot.team_a_avail %}доступна{% else %}<span class="unknown">нет покрытия</span>{% endif %}</dd>
+      <dt>История Team B ({{ team_b.name }})</dt><dd>{% if snapshot.team_b_avail %}доступна{% else %}<span class="unknown">нет покрытия</span>{% endif %}</dd>
+      <dt>Признаки игроков</dt><dd>{% if snapshot.player_avail %}доступны{% else %}<span class="unknown">недоступны (roster не доказан)</span>{% endif %}</dd>
+    </dl>
+    <table>
+      <tr><th>Признак</th><th>Значение (дифференциал A−B)</th></tr>
+      {% for row in snapshot.feature_rows %}
+      <tr>
+        <td><code>{{ row.name }}</code></td>
+        <td>{% if row.known %}{{ row.value }}{% else %}<span class="unknown">неизвестно</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </table>
+    {% if snapshot.unknown_features %}
+      <p class="target-note">Неизвестные признаки: {{ snapshot.unknown_features | join(", ") }}. В модели они импутированы нулём дифференциала («нет сигнала»), но помечены как неизвестные.</p>
+    {% endif %}
+  </section>
+
+  {% if outcome %}
+  <section class="card">
+    <h2>Фактический результат (известен из будущего — это ретроспектива)</h2>
+    <p>Победа: <strong>{{ outcome.winner_name }}</strong> ·
+    {% if outcome.correct %}
+      <span class="ok">оценка модели согласуется с исходом</span>
+    {% else %}
+      <span class="miss">оценка модели не согласуется с исходом</span>
+    {% endif %}
+    — это один наблюдаемый исход, а не метрика качества; оценку точности смотрите по замороженному heldout.</p>
+  </section>
+  {% endif %}
+  {% else %}
+  <section class="card">
+    <h2>Снимка прогноза ещё нет</h2>
+    <p>Для этой карты ещё не рассчитано ни одного immutable-снимка. Создание снимка —
+    явное действие: на каждый вызов записывается новый снимок с версией модели и
+    cutoff.</p>
+    <form method="post" action="/match/{{ game_id }}/predict">
+      <button type="submit">Рассчитать прогноз (retrospective_reconstructed)</button>
+    </form>
+  </section>
+  {% endif %}
+
+  <footer>
+    d2intel — локальный исследовательский инструмент. Market-анализ — только ANALYSIS;
+    ставки не автоматизируются. Цель прогноза: ADR-006 Gate-1 (pre-draft, карта 1).
+  </footer>
+</main>
+</body>
+</html>

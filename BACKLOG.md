@@ -1160,7 +1160,7 @@
 - **EPIC:** 13 — Frontend MVP
 - **STAGE:** MVP-FIRST10
 - **PRIORITY:** P1
-- **STATUS:** Planned
+- **STATUS:** Done (2026-09-26). Server-rendered страница `GET /match/{game_id}` (`src/d2intel/web/views.py` + Jinja2-шаблоны, без JS и клиентских фреймворков): баннер «РЕТРОСПЕКТИВА · retrospective_reconstructed», команды и p_a/p_b, блок модели (algorithm, версия/run_key, artifact hash, гиперпараметры), провенанс (источник данных, турнир, event_time, cutoff, computed_at, seq, state_hash, идентификаторы), покрытие признаков с масками (неизвестное не подменяется нулём), фактический исход с пометкой «известен из будущего». Запись снимка — явным действием `POST /match/{game_id}/predict` (новый immutable snapshot на вызов); `GET /` ведёт на последний снимок. Отклонение пути: `src/web/` из карточки → `src/d2intel/web/` (layout репозитория), schema не менялась (persist текстового evidence в `snapshot_evidence` — отдельная задача при появлении реестра evidence). Проверки: `ruff`/`mypy src` чистые, `pytest` полный — **386 passed** (+7 `tests/web/test_match_page.py`: ретро-метка, провенанс/версия, отсутствие live-элементов, empty-state, redirect-действие, 404, корневой redirect). Локальный запуск: uvicorn `:8000`, `/health` 200 `database: up`, страница на реальном матче Team Yandex — Aurora Gaming (Wallachia S9).
 - **GOAL:** Показать предсказание на реальном held-out историческом матче, явно как ретроспективу.
 - **CONTEXT:** Страница не должна выглядеть как «живой прогноз»; необходима явная маркировка.
 - **INPUT:** `API-001`.
