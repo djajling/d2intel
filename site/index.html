@@ -3,246 +3,180 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#07100f" />
-    <meta
-      name="description"
-      content="D2INTEL — интерфейс для воспроизводимой аналитики профессиональной Dota 2."
-    />
-    <title>D2INTEL — Match Intelligence</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap"
-      rel="stylesheet"
-    />
+    <meta name="theme-color" content="#090e0c" />
+    <meta name="description" content="D2INTEL — локальная рабочая область для воспроизводимых прогнозов профессиональной Dota 2." />
+    <title>Обзор — D2INTEL</title>
     <link rel="stylesheet" href="./styles.css" />
+    <script src="./app.js" defer></script>
   </head>
   <body>
-    <div class="ambient ambient--left"></div>
-    <div class="ambient ambient--right"></div>
-    <div class="grain" aria-hidden="true"></div>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Боковая панель">
+        <a class="brand" href="#overview" aria-label="D2INTEL — главная">
+          <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span class="brand-word">D2<span>INTEL</span><small>ESPORTS INTELLIGENCE</small></span>
+        </a>
+        <p class="sidebar-caption">РАБОЧАЯ ОБЛАСТЬ</p>
+        <nav class="side-nav" aria-label="Основная навигация">
+          <a class="nav-item nav-item--active" href="#overview" aria-current="page" aria-label="Обзор">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="3" width="5.5" height="5.5" rx="1.3"/><rect x="11.5" y="3" width="5.5" height="5.5" rx="1.3"/><rect x="3" y="11.5" width="5.5" height="5.5" rx="1.3"/><rect x="11.5" y="11.5" width="5.5" height="5.5" rx="1.3"/></svg>
+            <span>Обзор</span>
+          </a>
+          <a class="nav-item" href="#matches" aria-label="Матчи">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 4.5h12M4 9.5h12M4 14.5h7"/><circle cx="15.5" cy="14.5" r="1.5"/></svg>
+            <span>Матчи</span><span class="nav-counter" id="nav-match-count">—</span>
+          </a>
+          <a class="nav-item" href="#predictions" aria-label="Снимки прогнозов">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 15.5V11M8 15.5V6.5M12 15.5V9M16 15.5V4.5"/></svg>
+            <span>Снимки прогнозов</span>
+          </a>
+          <a class="nav-item" href="#method" aria-label="Метод">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7"/><path d="M8 7.5a2 2 0 1 1 3.2 1.6c-.9.7-1.2 1-1.2 2.1M10 14v.1"/></svg>
+            <span>Метод</span>
+          </a>
+        </nav>
+        <div class="sidebar-spacer"></div>
+        <section class="workspace-card" aria-label="Состояние рабочей области">
+          <div class="workspace-card-top"><span class="workspace-icon" aria-hidden="true">D</span><span class="local-badge">LOCAL</span></div>
+          <p class="workspace-title">Личная лаборатория</p>
+          <p class="workspace-copy" id="model-sidebar-status">Проверяем доступность модели…</p>
+          <div class="workspace-divider"></div>
+          <div class="sidebar-model-row"><span class="sidebar-status-dot" id="model-status-dot"></span><span id="model-status-label">Модель загружается</span></div>
+        </section>
+        <div class="sidebar-footer"><span class="health-indicator" id="health-indicator"></span><span id="health-label">Проверяем локальный API…</span></div>
+      </aside>
 
-    <header class="topbar page-width">
-      <a class="brand" href="#top" aria-label="D2INTEL — на главную">
-        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
-        <span>D2<span class="brand-accent">INTEL</span></span>
-      </a>
-      <nav class="nav" aria-label="Основная навигация">
-        <a class="nav-link nav-link--active" href="#match">Матч</a>
-        <a class="nav-link" href="#ledger">Журнал</a>
-        <a class="nav-link" href="#method">Метод</a>
-      </nav>
-      <div class="status" title="Демонстрационный режим">
-        <span class="status-dot"></span>
-        <span>RESEARCH MODE</span>
+      <div class="main-column">
+        <header class="topbar">
+          <div class="breadcrumbs"><span>Рабочая область</span><span class="breadcrumb-slash">/</span><strong>Обзор</strong></div>
+          <div class="topbar-actions">
+            <span class="updated-label" id="updated-label">Данные загружаются</span>
+            <button class="icon-button" id="refresh-button" type="button" aria-label="Обновить данные" title="Обновить данные">
+              <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16.2 8A6.5 6.5 0 0 0 5 5.1L3.8 6.5M3.8 6.5V3.7M3.8 6.5h2.8M3.8 12a6.5 6.5 0 0 0 11.2 2.9l1.2-1.4m0 0v2.8m0-2.8h-2.8"/></svg>
+            </button>
+          </div>
+        </header>
+
+        <main id="overview" class="content">
+          <section class="page-heading" aria-labelledby="page-title">
+            <div>
+              <p class="eyebrow"><span class="eyebrow-mark"></span>DOTA 2 <span class="eyebrow-divider">/</span> ИССЛЕДОВАНИЕ</p>
+              <h1 id="page-title">Прогнозы <span>без догадок.</span></h1>
+              <p class="page-description">Исследуйте исторические матчи, сохраняйте новые расчёты и проверяйте, что именно модель знала на момент снимка.</p>
+            </div>
+            <div class="mode-pill"><span class="mode-pill-dot"></span><span>РЕТРОСПЕКТИВНЫЙ РЕЖИМ</span></div>
+          </section>
+
+          <section class="research-banner" aria-labelledby="banner-title">
+            <div class="banner-copy">
+              <div class="banner-kicker"><span>РАБОЧИЙ КОНТУР</span><span class="banner-kicker-line"></span><span>MAP 01</span></div>
+              <h2 id="banner-title">Каждый расчёт —<br /><em>проверяемый снимок.</em></h2>
+              <p>Пересчитайте вероятность первой карты для матча из истории. Результат сохранится отдельно и не перезапишет предыдущие снимки.</p>
+              <div class="banner-actions">
+                <a class="button button--primary" href="#matches">Исследовать матчи <span aria-hidden="true">↓</span></a>
+                <a class="quiet-link" href="#method">Как читать прогноз <span aria-hidden="true">↗</span></a>
+              </div>
+            </div>
+            <div class="banner-visual" aria-hidden="true">
+              <div class="orbit orbit--outer"></div><div class="orbit orbit--inner"></div>
+              <div class="visual-axis visual-axis--horizontal"></div><div class="visual-axis visual-axis--vertical"></div>
+              <div class="visual-node"><span></span><i></i></div>
+              <div class="visual-label visual-label--top">MODEL / LR</div>
+              <div class="visual-label visual-label--bottom">AS-OF · MAP 01</div>
+            </div>
+            <div class="banner-footnote"><span class="footnote-mark">i</span><span>Только завершённые матчи · историческая реконструкция не является прогнозом до матча</span></div>
+          </section>
+
+          <section class="metrics-grid" aria-label="Сводка рабочей области">
+            <article class="metric-card"><div class="metric-topline"><span>ДОСТУПНО ДЛЯ АНАЛИЗА</span><span class="metric-icon metric-icon--lime" aria-hidden="true">↗</span></div><div class="metric-value" id="stat-match-count">—</div><div class="metric-caption">завершённых первых карт</div><div class="metric-note" id="stat-match-note">Подходящие матчи с разрешёнными командами</div></article>
+            <article class="metric-card"><div class="metric-topline"><span>СОХРАНЕНО</span><span class="metric-icon" aria-hidden="true">◷</span></div><div class="metric-value" id="stat-snapshot-count">—</div><div class="metric-caption">неизменяемых снимков</div><div class="metric-note">Повторный расчёт создаёт новую запись</div></article>
+            <article class="metric-card"><div class="metric-topline"><span>ПРОВЕРЕНО ИСХОДОМ</span><span class="metric-icon" aria-hidden="true">✓</span></div><div class="metric-value" id="stat-evaluated-count">—</div><div class="metric-caption">оценённых снимков</div><div class="metric-note">Счётчик по сохранённым оценкам</div></article>
+            <article class="metric-card metric-card--status"><div class="metric-topline"><span>МОДЕЛЬ</span><span class="metric-icon metric-icon--model" aria-hidden="true">ML</span></div><div class="metric-status-value" id="stat-model-status">Загрузка</div><div class="metric-caption" id="stat-model-version">Проверяем версию</div><div class="metric-note" id="stat-observed-note">Проспективных наблюдений: —</div></article>
+          </section>
+
+          <section id="matches" class="data-section" aria-labelledby="matches-title">
+            <div class="section-heading">
+              <div><p class="section-kicker">ИСТОРИЧЕСКАЯ ВЫБОРКА <span>01</span></p><h2 id="matches-title">Матчи для анализа</h2><p class="section-description">Завершённая первая карта, определённые команды и известный результат.</p></div>
+              <form class="search-form" id="match-search-form" role="search">
+                <label class="sr-only" for="match-search">Поиск команды или турнира</label>
+                <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.8" cy="8.8" r="5.8"/><path d="m13.2 13.2 4 4"/></svg>
+                <input id="match-search" type="search" placeholder="Команда или турнир" autocomplete="off" /><kbd>/</kbd>
+              </form>
+            </div>
+            <div class="table-card">
+              <div class="table-scroll">
+                <table class="data-table match-table">
+                  <thead><tr><th scope="col">МАТЧ</th><th scope="col">ТУРНИР / ПАТЧ</th><th scope="col">ДАТА ИГРЫ</th><th scope="col">ИСХОД</th><th scope="col">ПОСЛЕДНИЙ СНИМОК</th><th scope="col"><span class="sr-only">Действие</span></th></tr></thead>
+                  <tbody id="match-body"><tr class="placeholder-row"><td colspan="6"><span class="loading-mark"></span> Загружаем исторические матчи…</td></tr></tbody>
+                </table>
+              </div>
+              <div class="table-footer"><span id="match-count-label" aria-live="polite">Загружаем выборку…</span><div class="pagination"><button class="page-button" id="match-previous" type="button" aria-label="Предыдущая страница" disabled>←</button><span id="match-page-label">1 / 1</span><button class="page-button" id="match-next" type="button" aria-label="Следующая страница" disabled>→</button></div></div>
+            </div>
+            <p class="under-table-note"><span class="note-dot"></span>Новые расчёты помечаются <code>retrospective_reconstructed</code> и не считаются прогнозом, сделанным до матча.</p>
+          </section>
+
+          <section id="predictions" class="data-section predictions-section" aria-labelledby="predictions-title">
+            <div class="section-heading section-heading--compact">
+              <div><p class="section-kicker">APPEND-ONLY ЖУРНАЛ <span>02</span></p><h2 id="predictions-title">Снимки прогнозов</h2><p class="section-description">Последние 100 расчётов: ищите матчи, разбирайте исходы и выгружайте выборку.</p></div>
+              <div class="journal-controls">
+                <label class="journal-search">
+                  <span class="sr-only">Поиск по команде, турниру или снимку</span>
+                  <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.8" cy="8.8" r="5.8"/><path d="m13.2 13.2 4 4"/></svg>
+                  <input id="prediction-search" type="search" placeholder="Команда, турнир, ID" autocomplete="off" />
+                </label>
+                <label class="filter-select-wrap"><span class="sr-only">Фильтр снимков</span><select id="prediction-filter"><option value="all">Все снимки</option><option value="retrospective_reconstructed">Ретроспектива</option><option value="prospective_observed">Наблюдавшиеся</option><option value="evaluated">Оценка сохранена</option><option value="pending">Ожидают оценки</option><option value="abstentions">Воздержания</option></select><span class="select-chevron" aria-hidden="true">⌄</span></label>
+                <button class="button button--outline button--export" id="export-predictions" type="button" disabled>
+                  <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3v9m0 0 3.5-3.5M10 12 6.5 8.5M4 13.5v2.8c0 .4.3.7.7.7h10.6c.4 0 .7-.3.7-.7v-2.8"/></svg>
+                  <span>Экспорт CSV</span>
+                </button>
+              </div>
+            </div>
+            <div class="journal-metrics" aria-label="Сводка по выбранным снимкам">
+              <article class="journal-metric"><span>В ВЫБОРКЕ</span><strong id="journal-visible-count">—</strong><small id="journal-visible-note">Последние 100 снимков</small></article>
+              <article class="journal-metric"><span>ОЦЕНКА СОХРАНЕНА</span><strong id="journal-evaluated-count">—</strong><small>Есть запись о фактическом исходе</small></article>
+              <article class="journal-metric journal-metric--cohort"><span>РЕТРОСПЕКТИВА</span><strong id="journal-retrospective-stats">—</strong><small id="journal-retrospective-note">Оценки считаются отдельно</small></article>
+              <article class="journal-metric journal-metric--cohort journal-metric--observed"><span>PROSPECTIVE OBSERVED</span><strong id="journal-observed-stats">—</strong><small id="journal-observed-note">Оценки считаются отдельно</small></article>
+            </div>
+            <div class="table-card">
+              <div class="table-scroll">
+                <table class="data-table prediction-table">
+                  <thead><tr><th scope="col">СНИМОК / МОМЕНТ РАСЧЁТА</th><th scope="col">МАТЧ</th><th scope="col">ВЕРОЯТНОСТЬ A / B</th><th scope="col">ИСХОД / ОЦЕНКА</th><th scope="col">РЕЖИМ</th><th scope="col"><span class="sr-only">Подробнее</span></th></tr></thead>
+                  <tbody id="prediction-body"><tr class="placeholder-row"><td colspan="6"><span class="loading-mark"></span> Загружаем сохранённые снимки…</td></tr></tbody>
+                </table>
+              </div>
+              <div class="table-footer"><span id="prediction-count-label" aria-live="polite">Загружаем журнал…</span><span class="journal-limit">Показаны последние 100 снимков</span></div>
+            </div>
+            <p class="under-table-note"><span class="note-dot note-dot--mint"></span>Log loss / Brier считаются только для снимков с сохранённой оценкой. Ретроспективные и проспективные когорты не смешиваются.</p>
+          </section>
+
+          <section id="method" class="method-section" aria-labelledby="method-title">
+            <div class="method-heading"><div><p class="section-kicker">ПРОЗРАЧНОСТЬ ВАЖНЕЕ УВЕРЕННОСТИ <span>03</span></p><h2 id="method-title">Как устроен этот прогноз</h2></div><p>Вероятность — не обещание исхода. Это версионированная оценка, которую можно связать с конкретными признаками и проверить после матча.</p></div>
+            <div class="method-steps">
+              <article class="method-step"><span class="step-index">01</span><div><h3>Цель</h3><p>Team A выигрывает первую карту серии. Порядок команд фиксируется в снимке.</p></div></article>
+              <article class="method-step"><span class="step-index">02</span><div><h3>Срез данных</h3><p>Признаки prior-form ограничены cutoff; неизвестные значения остаются неизвестными.</p></div></article>
+              <article class="method-step"><span class="step-index">03</span><div><h3>Модель</h3><p>Baseline Logistic Regression. Версия и схема признаков сохраняются вместе с результатом.</p></div></article>
+              <article class="method-step"><span class="step-index">04</span><div><h3>Проверка</h3><p>Историческая реконструкция отделена от проспективных наблюдений и оценки по исходу.</p></div></article>
+            </div>
+            <div class="method-warning"><span class="warning-icon" aria-hidden="true">!</span><p><strong>Ограничение данных.</strong> Сейчас нет подтверждённого бесплатного источника расписания для автоматического upcoming-прогноза. Эта рабочая область анализирует завершённые карты; она не показывает live-прогнозы, ставки или выдуманные будущие матчи.</p></div>
+          </section>
+          <footer class="page-footer"><a class="footer-brand" href="#overview">D2<span>INTEL</span></a><span>ЛОКАЛЬНЫЙ ИССЛЕДОВАТЕЛЬСКИЙ ИНСТРУМЕНТ</span><a href="#overview">НАВЕРХ ↑</a></footer>
+        </main>
       </div>
-    </header>
+    </div>
 
-    <main id="top" class="page-width">
-      <section class="intro" aria-labelledby="page-title">
-        <div>
-          <p class="eyebrow">MATCH INTELLIGENCE / 01</p>
-          <h1 id="page-title">Не угадать.<br /><em>Зафиксировать сигнал.</em></h1>
-        </div>
-        <p class="intro-copy">
-          Вероятность имеет смысл только вместе со временем расчёта, источниками и тем, что
-          было известно до матча.
-        </p>
-      </section>
+    <dialog class="snapshot-dialog" id="snapshot-dialog" aria-labelledby="dialog-title">
+      <div class="dialog-shell">
+        <div class="dialog-topline"><p class="section-kicker" id="dialog-kicker">СНИМОК ПРОГНОЗА</p><button class="icon-button dialog-close" id="dialog-close" type="button" aria-label="Закрыть подробности">×</button></div>
+        <div class="dialog-heading"><div><span class="snapshot-seq" id="dialog-seq">SNAPSHOT</span><h2 id="dialog-title">Подробности снимка</h2><p id="dialog-match-meta"></p></div><span class="mode-tag" id="dialog-mode"></span></div>
+        <section class="dialog-probability" aria-label="Вероятности сохранённого снимка"><div class="dialog-probability-labels"><span id="dialog-team-a">Team A</span><strong id="dialog-probability-a">—</strong><strong id="dialog-probability-b">—</strong><span id="dialog-team-b">Team B</span></div><div class="probability-bar probability-bar--unavailable" id="dialog-probability-bar" role="img" aria-label="Вероятности недоступны"><span id="dialog-probability-fill"></span></div><p id="dialog-result-note"></p></section>
+        <section class="dialog-section"><div class="dialog-section-heading"><div><p class="section-kicker">ВОСПРОИЗВОДИМОСТЬ</p><h3>Происхождение</h3></div></div><dl class="provenance-grid" id="dialog-provenance"></dl></section>
+        <section class="dialog-section"><div class="dialog-section-heading"><div><p class="section-kicker">FEATURE SNAPSHOT</p><h3>Признаки на cutoff</h3></div><span class="coverage-summary" id="dialog-coverage-summary"></span></div><div class="feature-list" id="dialog-feature-list"></div><p class="feature-disclaimer">Разница = Team A − Team B. Это сохранённые входные признаки, а не причинное объяснение вероятности. Пустое значение означает, что данных не было.</p></section>
+      </div>
+    </dialog>
 
-      <section class="demo-notice" aria-label="Статус прототипа" data-reveal>
-        <span class="notice-icon" aria-hidden="true">i</span>
-        <p><strong>Интерактивный прототип.</strong> Цифры ниже — демонстрационные, не live-прогноз и не совет для ставок.</p>
-        <button class="notice-close" type="button" aria-label="Скрыть уведомление">×</button>
-      </section>
-
-      <section id="match" class="match-layout" aria-labelledby="match-heading">
-        <article class="match-card panel" data-reveal>
-          <div class="panel-label-row">
-            <p class="panel-label">FEATURED FIXTURE</p>
-            <span class="tag tag--live">DEMO</span>
-          </div>
-          <div class="match-meta" id="match-meta">
-            <span>FISSURE PLAYGROUND 2</span>
-            <span>•</span>
-            <span>BO3 / GAME 1</span>
-            <span>•</span>
-            <span>PATCH 7.39E</span>
-          </div>
-
-          <div class="hero-constellation" aria-hidden="true">
-            <div class="hero-portraits" id="hero-portraits"></div>
-            <span class="scan-line scan-line--one"></span><span class="scan-line scan-line--two"></span>
-          </div>
-          <p class="hero-pool-label"><span></span>ILLUSTRATIVE HERO POOL / NOT A DRAFT</p>
-          <ul class="hero-chips" id="hero-chips" aria-label="Иллюстративные герои прототипа (демо, не драфт)"></ul>
-
-          <div class="teams">
-            <div class="team team--a">
-              <span class="team-number">01</span>
-              <div class="team-copy"><p>TEAM</p><h2 id="match-heading">Spirit</h2></div>
-              <span class="team-orb team-orb--a" aria-hidden="true"></span>
-              <!-- Логотипы команд намеренно НЕ подгружаются с внешних CDN: права не подтверждены.
-                   Пока рисуется монограмма. Перед релизом положить локальный файл
-                   (site/assets/logos/spirit.png, права подтверждены) и заменить блок на:
-                   <img src="./assets/logos/spirit.png" alt="Логотип Team Spirit" data-mono="TS" /> -->
-              <span class="team-logo team-logo--spirit asset-failed" data-mono="TS" role="img" aria-label="Логотип Team Spirit"></span>
-            </div>
-            <div class="versus" aria-label="против">VS</div>
-            <div class="team team--b">
-              <!-- Прежний источник (img-cdn.hltv.org) был чужим CDN и отдавал 404 — заменён на монограмму.
-                   Перед релизом: site/assets/logos/falcons.png (права подтверждены) + <img data-mono="TF" />. -->
-              <span class="team-logo team-logo--falcons asset-failed" data-mono="TF" role="img" aria-label="Логотип Team Falcons"></span>
-              <span class="team-orb team-orb--b" aria-hidden="true"></span>
-              <div class="team-copy team-copy--right"><p>TEAM</p><h2 id="team-b-name">Falcons</h2></div>
-              <span class="team-number">02</span>
-            </div>
-          </div>
-
-          <div class="probability-block" data-reveal>
-            <div class="probability-heading">
-              <span>Вероятность <span id="team-a-label">Team Spirit</span></span>
-              <strong><output id="probability-value">62</output><small>%</small></strong>
-            </div>
-            <div class="probability-track-wrap">
-              <div class="probability-track" aria-hidden="true"><span id="probability-fill"></span></div>
-              <span class="probability-pulse" aria-hidden="true"></span>
-            </div>
-            <div class="probability-scale"><span>FALCONS</span><span>НЕЙТРАЛЬНО</span><span>SPIRIT</span></div>
-            <label class="slider-label" for="probability-control">
-              <span>Изменить сценарий</span><span id="scenario-name">Умеренное преимущество</span>
-            </label>
-            <input id="probability-control" type="range" min="35" max="75" value="62" aria-describedby="scenario-help" />
-            <p id="scenario-help" class="assistive-copy">Демонстрационный контрол: не изменяет исторический снимок. Это не прогноз и не совет для ставок.</p>
-            <p class="sr-only" aria-live="polite" id="scenario-live"></p>
-          </div>
-
-          <dl class="provenance" id="provenance" aria-label="Происхождение снимка"></dl>
-        </article>
-
-        <aside class="signal-card panel" aria-labelledby="signal-heading" data-reveal>
-          <div class="panel-label-row">
-            <p class="panel-label" id="signal-heading">SIGNAL SNAPSHOT</p>
-            <span class="capture" id="signal-capture">CAPTURED 18:42 UTC</span>
-          </div>
-          <div class="signal-score">
-            <span class="signal-ring" aria-hidden="true"><i></i></span>
-            <div><span class="metric-name">MODEL CONFIDENCE</span><strong id="signal-confidence">0.71</strong><p id="signal-confidence-note">Достаточно данных для оценки</p></div>
-          </div>
-          <div class="evidence-list" id="evidence-list"></div>
-          <a class="text-link" href="#method">Показать метод <span>↗</span></a>
-        </aside>
-      </section>
-
-      <section class="insight-grid">
-        <article class="panel chart-panel" aria-labelledby="trajectory-heading" data-reveal>
-          <div class="panel-label-row">
-            <div><p class="panel-label" id="trajectory-heading">FORM TRAJECTORY</p><p class="panel-subtitle">Относительный рейтинг / 90 дней</p></div>
-            <div class="legend"><span><i class="legend-dot legend-dot--a"></i>Spirit</span><span><i class="legend-dot legend-dot--b"></i>Falcons</span></div>
-          </div>
-          <div class="chart-wrap" role="img" aria-label="График формы: Team Spirit в конце периода опережает Team Falcons">
-            <div class="chart-grid"><i></i><i></i><i></i><i></i></div>
-            <svg viewBox="0 0 690 220" preserveAspectRatio="none" aria-hidden="true">
-              <defs><linearGradient id="areaA" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c8ff65" stop-opacity=".24"/><stop offset="1" stop-color="#c8ff65" stop-opacity="0"/></linearGradient></defs>
-              <path id="area-a" class="area" d="M0 165 C40 148 75 180 120 150 S200 125 245 138 S318 90 365 108 S437 78 485 95 S555 45 605 68 S655 32 690 40 L690 220 L0 220Z" fill="url(#areaA)"/>
-              <path id="line-a" class="line line--a" d="M0 165 C40 148 75 180 120 150 S200 125 245 138 S318 90 365 108 S437 78 485 95 S555 45 605 68 S655 32 690 40"/>
-              <path id="line-b" class="line line--b" d="M0 112 C40 96 75 130 120 110 S202 140 245 120 S325 155 365 138 S440 164 485 135 S565 158 605 142 S650 165 690 151"/>
-              <circle id="chart-end-a" class="chart-end" cx="690" cy="40" r="5"/><circle id="chart-end-b" class="chart-end chart-end--b" cx="690" cy="151" r="5"/>
-            </svg>
-            <div class="chart-label chart-label--top">+12</div><div class="chart-label chart-label--bottom">−12</div>
-          </div>
-          <div class="chart-dates"><span>90 ДНЕЙ</span><span>60</span><span>30</span><span>СЕЙЧАС</span></div>
-        </article>
-
-        <article class="panel roster-panel" aria-labelledby="roster-heading" data-reveal>
-          <div class="panel-label-row"><div><p class="panel-label" id="roster-heading">ROSTER STATUS</p><p class="panel-subtitle">Составы на момент снимка</p></div><span class="tag">AS OF</span></div>
-          <div id="roster-rows"></div>
-          <p class="roster-note">Статус состава — отдельный сигнал. Неизвестность не подменяется фактом.</p>
-        </article>
-      </section>
-
-      <section id="ledger" class="ledger-section" aria-labelledby="ledger-heading" data-reveal>
-        <div class="section-heading"><div><p class="eyebrow">TRACEABLE HISTORY</p><h2 id="ledger-heading">Журнал <em>проверяемых</em> прогнозов</h2></div><button class="filter-button" type="button" aria-pressed="false"><span></span>Только завершённые</button></div>
-        <div class="ledger panel" role="table" aria-label="Журнал демонстрационных прогнозов">
-          <div class="ledger-head" role="row"><span role="columnheader">СНИМОК</span><span role="columnheader">МАТЧ</span><span role="columnheader">ПРОГНОЗ</span><span role="columnheader">РЕЗУЛЬТАТ</span><span role="columnheader">СТАТУС</span></div>
-          <div id="ledger-body"></div>
-        </div>
-      </section>
-
-      <section id="method" class="method-section panel" data-reveal>
-        <p class="panel-label">THE CONTRACT</p>
-        <div><h2>Каждый ответ можно<br />разобрать <em>обратно до фактов.</em></h2><p>В продакшене здесь будут ссылки на источники, время доступности, версию модели и неизменяемый снимок признаков. Пока это визуальная модель интерфейса и моковый контракт данных.</p></div>
-        <a class="method-link" href="https://github.com/djajling/d2intel/blob/main/PRODUCT.md" target="_blank" rel="noopener">Открыть Product Vision <span>→</span></a>
-      </section>
-    </main>
-
-    <footer class="footer page-width"><span>© 2026 D2INTEL</span><span>PERSONAL RESEARCH TOOL / DEMO INTERFACE</span><a href="#top">НАВЕРХ ↑</a></footer>
-
-    <script type="application/json" id="match-contract-fallback">
-{
-  "contract_version": "0.1.0-mock",
-  "demo": true,
-  "evaluation_mode": "retrospective_reconstructed",
-  "disclaimer": "Моковый контракт первого прототипа. Все цифры демонстрационные, не live-прогноз и не совет для ставок.",
-  "target_note": "ВНИМАНИЕ: docs/PRD.md определяет цель как карта N ПОСЛЕ драфта, а корневые документы — первая карта ДО драфта. Цель прогноза требует согласования владельцем через ADR до подключения реального API.",
-  "snapshot_id": "#000124",
-  "computed_at": "2026-09-21T18:42:00Z",
-  "cutoff_at": "2026-09-21T18:00:00Z",
-  "data_age": "reconstructed",
-  "model_version_id": "demo-v0.0.0",
-  "feature_snapshot_id": "fs-000124",
-  "sources": [
-    { "id": "opendota", "kind": "history", "access": "mock", "rights": "pending_review" },
-    { "id": "liquipedia", "kind": "roster", "access": "mock", "rights": "pending_review" }
-  ],
-  "fixture": {
-    "tournament": "FISSURE PLAYGROUND 2",
-    "stage": null,
-    "series_format": "BO3",
-    "game_number": 1,
-    "patch": "7.39E",
-    "team_a": { "name": "Spirit", "roster_status": "confirmed" },
-    "team_b": { "name": "Falcons", "roster_status": "announced" }
-  },
-  "prediction": {
-    "team_a_win_probability": 0.62,
-    "team_b_win_probability": 0.38,
-    "abstention": false,
-    "confidence": 0.71,
-    "confidence_note": "Достаточно данных для оценки",
-    "slider": { "min": 35, "max": 75, "default": 62 },
-    "scenario_bands": [
-      { "upto": 47, "label": "Преимущество Falcons" },
-      { "upto": 54, "label": "Почти равные шансы" },
-      { "upto": 66, "label": "Умеренное преимущество" },
-      { "upto": 101, "label": "Выраженное преимущество" }
-    ]
-  },
-  "evidence": [
-    { "label": "форма за 30 дней", "delta": 8.4, "direction": "positive" },
-    { "label": "стабильность ростера", "delta": 4.2, "direction": "positive" },
-    { "label": "сила соперников", "delta": -2.8, "direction": "negative" }
-  ],
-  "hero_pool": [
-    { "name": "Phantom Assassin", "image": "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/heroes/phantom_assassin_vert.jpg", "aspect": "235x272", "demo": true },
-    { "name": "Puck", "image": "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/heroes/puck_vert.jpg", "aspect": "235x272", "demo": true },
-    { "name": "Earthshaker", "image": "https://cdn.cloudflare.steamstatic.com/apps/dota2/images/heroes/earthshaker_vert.jpg", "aspect": "235x272", "demo": true }
-  ],
-  "form_trajectory": {
-    "window_days": 90,
-    "team_a_path": "M0 165 C40 148 75 180 120 150 S200 125 245 138 S318 90 365 108 S437 78 485 95 S555 45 605 68 S655 32 690 40 L690 220 L0 220Z",
-    "team_a_line": "M0 165 C40 148 75 180 120 150 S200 125 245 138 S318 90 365 108 S437 78 485 95 S555 45 605 68 S655 32 690 40",
-    "team_b_line": "M0 112 C40 96 75 130 120 110 S202 140 245 120 S325 155 365 138 S440 164 485 135 S565 158 605 142 S650 165 690 151",
-    "team_a_end": { "x": 690, "y": 40 },
-    "team_b_end": { "x": 690, "y": 151 }
-  },
-  "ledger": [
-    { "snapshot_id": "#000124", "team_a": "Spirit", "team_b": "Falcons", "event": "Fissure Playground · Game 1", "prob_chip": "62% SPIRIT", "result": "—", "status": "PENDING", "status_kind": "open" },
-    { "snapshot_id": "#000119", "team_a": "BetBoom", "team_b": "Spirit", "event": "DreamLeague · Game 1", "prob_chip": "54% BETBOOM", "result": "BETBOOM WON", "status": "RESOLVED", "status_kind": "resolved" },
-    { "snapshot_id": "#000113", "team_a": "Falcons", "team_b": "Liquid", "event": "BLAST Slam · Game 1", "prob_chip": "57% FALCONS", "result": "LIQUID WON", "status": "RESOLVED", "status_kind": "miss" }
-  ]
-}
-    </script>
-    <script src="./app.js"></script>
+    <dialog class="confirm-dialog" id="confirm-dialog" aria-labelledby="confirm-title">
+      <form method="dialog" class="confirm-card"><span class="confirm-mark" aria-hidden="true">↻</span><p class="section-kicker">НОВЫЙ IMMUTABLE SNAPSHOT</p><h2 id="confirm-title">Создать новый расчёт?</h2><p id="confirm-copy">Новый результат будет добавлен в журнал отдельной записью. Существующие снимки не изменятся.</p><div class="confirm-note">Расчёт будет <code>retrospective_reconstructed</code>: он не был сделан до начала матча.</div><div class="confirm-actions"><button class="button button--quiet" id="confirm-cancel" value="cancel">Отмена</button><button class="button button--primary" id="confirm-submit" value="confirm">Сохранить снимок <span aria-hidden="true">→</span></button></div></form>
+    </dialog>
+    <div class="toast-stack" id="toast-stack" aria-live="polite" aria-atomic="false"></div>
   </body>
 </html>

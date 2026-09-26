@@ -1,284 +1,82 @@
 # Актуальная передача проекта между агентами
 
-**Обновлено: 2026-09-23.** Это состояние репозитория `djajling/d2intel`, а не промпт для ручного переноса из чата. Начать с [AGENTS.md](AGENTS.md), затем читать этот файл. `HANDOFF.md` — архив, не источник текущих назначений.
+**Обновлено: 2026-09-27.** Это состояние репозитория `djajling/d2intel`, а не промпт для ручного переноса из чата. Начать с [AGENTS.md](AGENTS.md), затем читать этот файл. `HANDOFF.md` — архив, не источник текущих назначений.
 
 ---
 
 ## Что это за проект
 
-Dota Esports Intelligence Platform — solo-founder проект: автоматизированная система сбора и интерпретации данных о профессиональной Dota 2 (турниры, матчи, команды, игроки, герои, драфты, патчи, игровые события, экспертные мнения, рыночные коэффициенты). Центральный продуктовый слой — вероятностный прогноз исхода с сохранением того, что было известно на момент прогноза, и последующей проверкой результата.
+Dota Esports Intelligence Platform — solo-founder проект: локальная исследовательская система для воспроизводимой аналитики профессиональной Dota 2. Центральный продуктовый слой — вероятность исхода с сохранением того, что было известно на cutoff, версии модели и последующей проверкой.
 
-**Ограничения, подтверждённые владельцем:**
+**Ограничения владельца:** только бесплатные источники; личный исследовательский инструмент; LLM не является математическим предиктором; модель не обещает прибыль. Бесплатного легального источника upcoming-расписания для автоматического предматчевого продукта не подтверждено.
 
-- только **бесплатные** источники данных; платные данные не входят в critical path;
-- **личный исследовательский** инструмент (не публичный сервис, без перепродажи данных);
-- LLM — для неструктурированных данных, объяснений и экспертного слоя, **не** как математический предиктор;
-- главный принцип: «минимально необходимая сложность при максимальной проверяемости результата»;
-- рабочий язык и язык ответов: **русский**.
+## Актуальный код и локальный UI
 
-## Текущее состояние
+Runtime-контур в репозитории включает ingestion, canonical normalization, as-of prior-form features, Logistic Regression baseline, immutable prediction service и локальную UI-рабочую область в `site/`.
 
-Спецификация утверждена и ядро реализовано (всё 2026-09-21): product spec v0 (`docs/PRD.md`), временная семантика (`docs/PRD_TEMPORAL.md`, `ADR-001`/`ADR-005` — Accepted), аудит источников (`SRC-001` — случай B: история OpenDota PASS, upcoming no-go, работаем в ретроспективном контуре), скелет репозитория + CI (`INF-001`), temporal-схема БД, миграция `0001` (`DB-001`), OpenDota-клиент + raw capture, миграция `0002` (`ING-001`), нормализация исторического ядра, миграция `0003` (`DATA-001`). Код — в `src/d2intel/`, тесты — в `tests/`. Локальный запуск ядра выполнен 2026-09-22; факты и ограничения ниже.
+- FastAPI раздаёт рабочую область на `/`; `GET /health`, `/docs`, `/predict/game/{game_id}` и `/api/*` остаются доступны отдельно.
+- Dashboard API read-only: `GET /api/overview`, `GET /api/matches`, `GET /api/predictions`, `GET /api/predictions/{snapshot_id}`. Из UI новый расчёт отправляется только в существующий prediction service.
+- В таблицу матча попадают только завершённые **сыгранные** game1 с известным победителем и resolved/distinct teams; фальсифицированного future/upcoming календаря нет.
+- «Новый расчёт» требует существующего локального model artifact и явного подтверждения. Каждый вызов создаёт новый immutable snapshot; старые не перезаписываются.
+- Режим расчёта по исторической игре всегда подписан `retrospective_reconstructed`. Он **не** был сделан до игры. `prospective_observed` показывается отдельно.
+- Журнал отображает последние 100 snapshots, режимы, результат/оценку; полные признаки загружаются отдельным endpoint при открытии карточки. Неизвестные признаки остаются неизвестными.
+- Адаптивная навигация/таблицы, поиск команды/турнира, pagination, обновление, confirmation/detail dialogs, keyboard shortcut `/`, reduced-motion и явные состояния недоступного API/model.
 
-### Выполнено: FEAT-001 — prior-form датасет as-of для map1 (2026-09-22)
+## Последнее изменение (2026-09-27): API-backed workbench + prediction journal
 
-- **Scope:** реализован feature-слой — `src/d2intel/features/prior_form.py` (модуль), `tests/features/` (unit + интеграция), `docs/FEATURE_DATASET.md` (контракт датасета). Схема БД, миграции и зависимости не менялись.
-- **Отклонение от карточки:** `FILES EXPECTED TO CHANGE` указывал `src/features/prior_form.py`; фактически модуль лежит в package `src/d2intel/features/` (layout репозитория — код в `src/d2intel/`, как у `ING-001`/`DATA-001`). Смысл и состав не изменены — отклонение только в пути, аналогично `DB-001`/`docs/SCHEMA.md` §1.
-- **Параллельная работа:** одновременно шёл ingestion другим агентом. Каждый работал в собственном клоне; БД, процесс и миграции со стороны FEAT-001 не менялись. Код опубликован **в ветке `feat/FEAT-001-prior-form`** (не в `main`) — по правилу параллельной работы; интеграцию в `main` выполняет ответственный за интеграцию.
-- **Проверки:**
-  - `ruff check src tests scripts` — новых ошибок нет; остались **6 исходных UP038** (`normalize/payloads.py:107,164`, `normalize/pipeline.py:716,726,737`, `normalize/writers.py:59`).
-  - `mypy src` — новых ошибок нет; остались **4 исходных union-attr** (`normalize/pipeline.py:144,149,150,151`).
-  - `pytest` безопасного набора + `tests/features/` — **154 passed** (134 прежних + 20 новых), 1 сторонний DeprecationWarning.
-  - Интеграционные тесты FEAT-001 выполнились на выделенной тестовой БД `d2intel_test` неразрушающе (rollback транзакции); `downgrade base` не выполнялся.
-  - Сборка на реальных данных (read-only SELECT по рабочей БД): 3455 примеров, все `train_eligible`; team-покрытие ≈ 0.84/0.81; `days_since_last` min = 4 часа — граница `result_lag` работает, утечек в признаки нет; `y` ≈ 0.53. Player-признаки на этом срезе отсутствовали (`game_participant` пуст на момент проверки) — отработал availability-aware fallback (маски `False`, значения `NaN`).
-- **Не сделано и не заявляется:** полный `pytest` с миграционными тестами не выполнялся (они деструктивны для общей тестовой БД при параллельной работе); CI коммита не подтверждён; метрик качества нет (это `ML-001`); immutable snapshot в `feature_snapshot` не пишется (это `API-001`).
-- **Runtime-код приложения не менялся** — перезапуск API не требуется.
+Продолжение 2026-09-27 в локальной рабочей копии `main` от `69b4e23`: целевой проект подтверждён владельцем как `djajling/d2intel` (не первоначальная ссылка `svoya`). Остальные незакоммиченные изменения в checkout уже существовали к началу текущего продолжения; работа шла поверх них, без reset/commit/push.
 
-### Выполнено: match-detail ingestion (2026-09-22..23) — включает player-признаки
+- `site/index.html`, `site/app.js`, `site/styles.css`: журнал получил поиск по команде/турниру/ID, фильтры по режиму, оценке и abstention, CSV-экспорт с защитой от spreadsheet formula injection, метрики log loss/Brier только по снапшотам с метриками и отдельно для retrospective/prospective когорт, отображение явных abstention без ложных 0% и mobile-полировку контролов.
+- `src/d2intel/api/dashboard.py`: список матчей возвращает причину abstention последнего снимка для честного preview; `tests/api/test_dashboard.py` покрывает query response.
+- `tests/test_workbench_assets.py`: безопасные статические regression-проверки контрактов controls, разделения когорт и CSV-полей.
+- `site/README.md`: актуализированы возможности и безопасные проверки.
+- Уточнение метрик: оценённые исходы без конкретного `log_loss`/`brier` входят в `n` исходов, но не в размер соответствующего среднего; небольшая selectable-журнальная выборка не является frozen model benchmark.
 
-Цель: включить FEAT-001 player-признаки. До этого они были **принципиально**
-недоступны: `validate_match_detail` карантинил каждый pro-матч из-за пустого
-`draft_timings` (особенность источника, `OPENDOTA_API_MAP.md` §2.2/§4.5),
-поэтому `source_observation` не создавался и нормализация не видела матчей.
+Проверки продолжения: `pytest tests/api/test_dashboard.py tests/test_workbench_assets.py tests/test_smoke.py` — 18 passed; targeted `ruff check src/d2intel/api/dashboard.py tests/api/test_dashboard.py tests/test_workbench_assets.py` — clean; `mypy src/d2intel/api/dashboard.py` — clean; `node --check site/app.js` и `git diff --check` — clean. `tests/test_workbench_assets.py` — новый untracked файл (статус `??`, поэтому `git diff --numstat` его не отображает). DB integration / actual browser preview / real local server не выполнены. Из-за токена, случайно попавшего в командный вывод `git remote -v`, GitHub credential нужно считать раскрытым, отозвать и заменить; не повторять значение и не использовать remote для push.
 
-- **Ветка `feat/match-detail-ingest`** (слита в рабочую `feat/FEAT-001-prior-form`, конфликтов нет — файлы не пересекаются):
-  - `scripts/ingest_match_details_once.py` — sync-once раннер `/api/matches/{id}`: обход канонических игр по убыванию `match_id`, `--limit` (2500 по умолчанию, меньше дневного бюджета free-tier), идемпотентность по `source_observation` + watermark в `ingestion_cursor` (404 тоже двигают watermark), выживание минутного исчерпания квоты (ждать смены окна + перецепление клиента на свежий бюджет; суточное исчерпание — единственный реальный стоп), закрытие зависших прогонов старше часа, явный статус `ingestion_run`.
-  - `src/d2intel/ingestion/validation.py` — расслаблен `validate_match_detail`: пустой `draft_timings` → note `empty_draft_timings`, запись сохраняется. Карантин остался для настоящих дефектов (нет `match_id`, нет `players`, невалидное время). `QuarantineReason.EMPTY_DRAFT_TIMINGS` оставлен определённым (не ломать фильтры по старому карантину).
-  - `tests/ingestion/test_validation.py` — тест переписан под новую семантику.
-  - `scripts/build_prior_form_dataset.py` — сборка датасета на реальных данных (read-only) + отчёт покрытия: `DatasetMeta`, баланс меток, NaN-покрытие значимых признаков, `days_since_last` min как sanity-check `result_lag`. Exit 3 + явный вердикт, если player-признаки полностью замаскированы.
-- **Проверки:** `ruff`/`mypy` — без новых ошибок (те же 6 `UP038` + 4 union-attr в `normalize/`); `pytest` безопасного набора (без деструктивных `test_migrations`/`test_constraints`) — **329 passed**, exit 0.
-- **Результат прогона 2026-09-23:** 3 907 match-detail наблюдений (из 16 063 канонических карт, ~24%), нормализация дала 39 070 участников / 2 286 игроков / 39 070 результатов / 39 070 свидетельств состава, карантин пуст. Источник дважды падал (HTTP 521/522, Cloudflare) — раннер останавливался с явным `failed`, после восстановления источника прогон продолжался с watermark без потерь и дублей.
-- **Проверка цели (главное):** сборка датасета после enrichment — `player_a_avail` **0 → 618**, `player_b_avail` 0 → 617, покрытие player-признаков 17.86–17.89% (командных 83.5%/80.9%), `days_since_last` min = 4 часа, `y` ≈ 0.53, `target_patch_known` 3455/3455. Player-признаки **больше не замаскированы**; покрытие ограничено долей backfill'а и будет расти по мере дневных батчей.
-- **Backfill идёт дневными батчами** (согласовано с владельцем): 60/мин, 3000/день free-tier. Это внешний календарь — ~6 дней на все 16 063 карты. Никакой API-ключ не используется; `OPENDOTA_API_KEY` не задан. На момент останова дневной остаток квоты — 2 738.
-- **Не сделано и не заявляется:** интеграция в `main` — **решение владельца**; полный `pytest` с миграционными тестами не выполнялся (деструктивны для общей БД).
+Статус Git всё ещё `main...origin/main [ahead 34]`, изменённые/новые файлы перечислены в `git status`; ничего не закоммичено/не опубликовано. Прямой URL preview tool не был корректно доступен в этом host; статический UI визуально не подтверждён.
 
-### Предыдущий пакет (2026-09-22): handoff + локальный запуск
+---
 
-- Контекст сохраняется в репозитории, чтобы следующий агент работал без истории чатов.
-- Деплой означает push **и запуск приложения**; цель — компьютер владельца, Windows, не облако.
-- Для того пакета был согласован прямой push в `main`. Продуктовый код, схему и зависимости не меняли.
-- Добавлен `AGENTS.md`; актуализированы README, этот handoff, `REPO_SETUP.md`, стартовая инструкция и layout; старые handoff-пакеты помечены архивными.
+## Последнее изменение (2026-09-27): API-backed workbench
 
-### Подтверждённое состояние запуска
+Текущая сессия изменила:
 
-- Runtime-код: commit `8867df1`. SHA пакетов смотреть в `git log`/`origin`.
-- Windows, Python `3.12.2`, зависимости из `requirements.txt`/`requirements-dev.txt` установлены в `.venv`, пакет установлен editable. CI использует Python `3.11`; результаты окружений не отождествлять. **Внимание:** pinned-зависимости (`pandas==2.2.3` и др.) не имеют wheels для Python 3.13+ — venv нужно создавать на 3.11/3.12, иначе pip пытается собирать из исходников и падает (нет VS build tools).
-- Уже существовал PostgreSQL `17.10`, доступна БД `d2intel` на loopback, схема `0003`. Docker в PATH отсутствует и для этой существующей БД не нужен. Compose для новой среды описывает PostgreSQL `17.4`, это не версия текущей локальной службы.
-- Запущен `python -m uvicorn d2intel.app:app --host 127.0.0.1 --port 8000` без reload. Реальный запрос `http://127.0.0.1:8000/health` вернул `200`, `status: ok`, `database: up`.
-- На момент проверки `raw_payload`, `game`, `prediction` пусты. Никакой ingestion, нормализации или обучения в этой сессии не запускали; данные БД и миграции не меняли.
-- Это фоновый процесс, **не Windows-служба**. Автозапуск после перезагрузки/выхода не настроен; сам факт commit/push его не создаёт. `REPO_SETUP.md` содержит команды повторного запуска.
+- `src/d2intel/api/dashboard.py` — read-only overview, filtered/paginated match list, recent snapshot journal/detail; доступность артефакта baseline проверяется локально.
+- `src/d2intel/app.py` — подключён dashboard router и раздача `site/` с `/`, если каталог существует.
+- `site/index.html`, `site/app.js`, `site/styles.css` — новый адаптивный интерфейс без mock data: обзор, подходящие матчи, новый расчёт с подтверждением, append-only журнал и подробный provenance/feature view.
+- `tests/api/test_dashboard.py` — API/UI contracts через in-memory session double без PostgreSQL/migrations.
+- `site/README.md`, `REPO_SETUP.md`, `README.md` — назначение, API, запуск и актуальный product-status.
 
-### Проверки и открытые блокеры
+**В этой сессии:** схема БД/миграции, рабочая БД, ingest/normalization/обучение, model artifact и работающий runtime-процесс не изменялись. Real DB integration, браузерный прогон на реальных данных и обновление сервера владельца здесь **не выполнялись**.
 
-- Установка зависимостей и editable-пакета — успешно (Python 3.11.9 в новом клоне; безопасный набор + `tests/features/` + `tests/evaluation/` + `tests/models/` на объединённом `main` — exit 0).
-- Следующий инфраструктурный шаг: отдельная согласованная задача на lint/type (6 `UP038` + 22 attr-defined/index в `build_prior_form_dataset.py` + 4 union-attr) и полный suite в изолированной тестовой БД; при необходимости — согласовать постоянную Windows-службу. Успешный health ядра не закрывает `DEP-001`/`DEP-002` и не делает MVP готовым.
+**Проверки:** после исправления API test suite `tests/api/test_dashboard.py` и smoke `tests/test_smoke.py` запускаются локально; targeted Ruff и mypy проверяются отдельно. Полный suite по общей тестовой БД не запускать без проверки `D2INTEL_TEST_DATABASE_URL`: migration/constraint fixtures выполняют разрушительный `downgrade base`.
 
-### Интеграция в `main` выполнена (2026-09-23)
+**Оставшийся ранее изменённый файл:** `HANDOFF_PROMPT.md` был modified до начала этой сессии. Его существующий блок с мониторингом prospective freeze от 2026-09-26 сохранён; текущая запись добавлена отдельно. Не откатывать чужую правку.
 
-Три ветки слиты в `main` (remote HEAD `bb89e39`), конфликтов не было:
+## Исторический/prospective контекст
 
-1. `a2b6329` — `feat/FEAT-001-prior-form`: feature-слой + match-detail ingestion (раннер, расслабленный валидатор) + скрипт сборки датасета.
-2. `084d926` — `origin/lead-patch-seed`: evaluation harness (`evaluation/`), models layer (`models/`), ADR-006, frozen split, prior baseline.
-3. `bb89e39` — `origin/feat/first-intelligence-dashboard`: статический дашборд в `site/` (мокап, не API-интегрирован; base был старый `cc35c29`, но git свёл автоматические слияния чисто).
+### API-001 / LR
 
-**Проверки на объединённом `main`:** `pytest` безопасного набора (без деструктивных `test_migrations`/`test_constraints`) — exit 0; `ruff` — 6 старых `UP038` (`normalize/payloads.py:107,164`, `normalize/pipeline.py:716,726,737`, `normalize/writers.py:59`); `mypy src` — 4 старых union-attr (`normalize/pipeline.py:144,149,150,151`). Новых ошибок интеграция не принесла; все 34 тестовых файла и 32 модуля на месте. Рабочая БД не менялась (схема `0003`), runtime-код приложения не перезапускался.
+LR использует 9 prior-form дифференциалов. Model gate и метрики, обучающий pipeline, freeze/reconcile описаны в предыдущих разделах ниже. Ретроспективный сервис принимает target game1, проверяет as-of purity и на каждый вызов создаёт immutable снимок с model/feature version, cutoff и шаблонным evidence.
 
-### ML-001 (LR) выполнен + аудит upcoming (2026-09-23)
+### Wallachia prospective вариант C (2026-09-26)
 
-**LR-базлайн обучен и записан.** `scripts/run_lr_baseline.py` — Logistic
-Regression на prior-form дифференциалах (9 признаков), `C` подбирается
-**только на valid**, μ — `PriorFormParams.fit` на train до сборки датасета,
-предикты — на замороженном test. Результаты на frozen test (n=131):
+Выполнены head-sync и immutable freeze → reconcile скрипты. Текущая историческая запись для Na'Vi vs Aurora не обновляется UI автоматически, пока не добавлен reconcile-snapshot в БД, а заморозка ждёт появления доказанной game1 после cutoff. Файл freeze остаётся immutable; если нужная игра отсутствует в источнике/не имеет доказанного map index, reconciliation ждёт.
 
-| Метрика | LR | floor / uniform |
-|---|---|---|
-| accuracy | **0.5649** | 0.5191 |
-| log_loss | **0.6786** | 0.6931 (uniform) |
-| brier | 0.2429 | — |
-| 95% CI log_loss | 0.6535 – 0.7034 | — |
+### Независимые продуктовые риски
 
-Порог ADR-006 (0.70) **не достигнут** — честно зафиксировано; при n=131
-CI точности ±8.5пп, поэтому 0.56 статистически от floor почти
-неотличим (см. расчёт порогов ниже). Зато LR — первый кандидат, который
-**несёт информацию**: log_loss лучше uniform, диапазон p_a
-0.306–0.763 против константы 0.5131 у prior. Записано в БД:
-`model_version` `logreg_prior_form` + 131 `prediction_snapshot` +
-131 `prediction_evaluation` (идемпотентно, повторный прогон не дублирует).
+- Схема `0003`; full pre-match scope заблокирован отсутствием проверенного free upcoming source.
+- Замороженный тест LR остаётся малым (`n=131` по handoff 2026-09-23); точность и прибыль не обещать.
+- PRD/корневые файлы расходятся относительно фазы прогноза: `docs/PRD.md` против ADR/корневой формулировки map1 pre-draft — проверять ADR-006 перед новым target contract.
+- Нормализация не инкрементальна; регулярное ingestion/auto-start не настроены.
 
-**Аудит upcoming (`SRC_002`)** — `docs/research/SRC_002_UPCOMING_VERDICT.md`:
-вердикт B подтверждён. Бесплатного легального источника расписания нет
-(Liquipedia — нет schedule-эндпоинта, только POST-lookup по matchid;
-OpenDota — только история; STRATZ — Cloudflare 403 из облака; PandaScore —
-fixtures бесплатно, но исключён проектом + токен скомпрометирован).
-Live-тест на Wallachia возможен **только** как ручной prospective-прогон
-(владелец даёт фикстуру заранее, cutoff = now, `prospective_archived`).
+## Проверки, запуск, публикация
 
-**Проверки:** `ruff src tests scripts` — 6 старых `UP038` (новых нет);
-`mypy src scripts` — 26 старых ошибок в `build_prior_form_dataset.py` и
-`normalize/pipeline.py` (новых нет); `pytest` безопасного набора —
-**334 passed** (11 новых тестов `tests/features/test_lr_baseline.py`).
-Рабочая БД: схема `0003`, добавлены строки `model_version`/
-`prediction_snapshot`/`prediction_evaluation` (миграций не было).
-Runtime-код приложения не менялся — перезапуск API не требуется.
+Сначала безопасные локальные тесты и targeted lint/typecheck; `ruff src tests scripts`, `mypy src` могут иметь заранее записанные ошибки в `normalize/` и `scripts/build_prior_form_dataset.py`, описанные в исторических handoff-разделах. Не выдавать эти проблемы за новые UI failures без дифференциальной проверки.
 
-### API-001 выполнен (2026-09-23)
+UI открывается на `http://127.0.0.1:8000/` после запуска FastAPI из `.venv`; полный запуск/health проверять с осторожностью: на компьютере владельца может уже слушаться локальный сервер, а реальная модель требует локального игнорируемого artifact в `artifacts/models/`. Не останавливать существующие процессы и не обучать/восстанавливать артефакт автоматически.
 
-Prediction service: `POST /predict/game/{game_id}` — только game1
-(`map_number = 1`), на каждый вызов новый immutable `prediction_snapshot`
-(новый `snapshot_seq`, а не перезапись), снимок несёт `model_version_id` +
-`feature_snapshot_id` + `cutoff_at`, режим `retrospective_reconstructed`,
-evidence — шаблонное с `template`-id (LLM нет), purity-проверка: независимый
-подсчёт карт, доступных к cutoff, и сверка с признаками (нарушение → 500,
-снимок не пишется).
+Эта сессия не делала commit/push/deploy. По AGENTS.md handoff/PR публикация и реальный запуск на компьютере владельца остаются отдельным подтверждённым шагом; не считать их выполненными по наличию файлов.
 
-**Реальный запуск на компьютере владельца:** uvicorn поднят на `:8000`,
-`/health` → 200 `{"database":"up"}`; `/predict/game/{id}` на реальной
-игре → **200, p_a = 0.5489** (p_b 0.4511), покрытие Team A 191 / Team B 38
-игр, два последовательных вызова создали **разные** snapshot_id при той же
-цели — иммутабельность работает. После проверки сервер остановлен
-(фоновый процесс, не служба — автозапуск не настроен, `REPO_SETUP.md`).
-
-**Артефакт модели:** LR теперь сериализуется в `artifacts/models/*.joblib`
-(gitignored) с регистрацией `artifact_uri`/`artifact_hash` в
-`model_version`. Перерегистрирован под run-key `lr-inference-v1`
-(версия `0cd37646`) — старая версия `9399c7db` осталась кандидатом без
-артефакта (модель неизменяема, обновить нельзя, только новая версия).
-Также `PriorFormBuilder` научился фильтровать цели по `series_ids` —
-инференс одной серии больше не собирает весь датасет.
-
-**Проверки:** `ruff src tests scripts` — 6 старых `UP038` (новых нет);
-`mypy src scripts` — 26 старых ошибок в `build_prior_form_dataset.py` и
-`normalize/pipeline.py` (новых нет); `pytest` безопасного набора —
-**348 passed** (+14 `tests/api/test_predict.py`: immutability, отказ на
-не-game1, обязательные поля, метка retrospective, триггер БД, evidence).
-Схема БД не менялась. Runtime: сервер запускался и был остановлен.
-
-### Wallachia: данные обновлены, prospective невозможен через API (2026-09-26)
-
-Владелец хотел ручной prospective-прогон на живой фиксue Wallachia S9.
-Что было сделано и выяснено (по порядку):
-
-1. **Данные отставали на 3 дня.** БД стояла на `2026-09-22 17:55`, а
-   турнир шёл (`now = 2026-09-26`). Причина: `run_sync_once` возобновляет
-   пагинацию от сохранённого watermark **вниз**, а OpenDota отдаёт свежие
-   матчи **сверху** — курсор до них никогда не доходил.
-2. **Добавлен head-sync** (`run_head_sync`, CLI `--head`): начинает с самой
-   свежей страницы и спускается только до watermark. Коммит `a179082`.
-   Рабочая БД: курсор `8562458587` → `8973166330`, последняя игра
-   `2026-09-26 13:45`, матчи Wallachia за 25–26 Sep каноничны.
-3. **Реальный prediction на свежей фиксue** (через работающий API):
-   `Aurora Gaming vs Team Yandex`, game1 от `2026-09-25 20:27` →
-   **200, p_a = 0.5128**. Это валидный retrospective-прогон на данных,
-   которых модель не видела при обучении.
-4. **Блокер prospective.** В БД **0 игр с неизвестным winner** — OpenDota
-   `/proMatches` отдаёт только завершённые матчи. Источника upcoming- или
-   live-целей нет (вердикт B, `SRC_002`). Поэтому «предсказать до
-   результата» через существующую игру нельзя: как только игра попала в
-   БД, её исход уже известен.
-
-**Вывод для владельца:** честный live-тест возможен только если владелец
-называет фиксue **до её появления в источнике** — тогда features строятся
-с `cutoff = now` по двум каноническим командам, а снимок/исход связываются
-после матча. Для этого нужна схема цели без FK на будущую игру
-(варианты A/B/C см. `docs/agent/AGENT_PROSPECTIVE_WALLACHIA.md`) —
-архитектурное решение за владельцем.
-
-### Реализован вариант C: freeze → reconcile (2026-09-26, вечер)
-
-Владелец дал ход («го»), выбран рекомендованный вариант **C** — схему не
-меняем, провенанс храним файлом до матча и связываем после.
-
-- `scripts/prospective_freeze.py` — строит features с `cutoff = now` для двух
-  канонических команд, применяет LR из артефакта и пишет **immutable** JSON в
-  `artifacts/prospective/<freeze_id>.json` (features + `p_a`/`p_b` + модель +
-  cutoff + канонический порядок Team A/B). Файл — единственное доказательство
-  того, что было известно до матча.
-- `scripts/prospective_reconcile.py` — после матча находит завершённую **game1**
-  между теми же командами с `event_time > cutoff`, пишет canonical-снимок в
-  режиме `prospective_observed` (`assumed_available_at IS NULL`) и оценку
-  (`record_evaluation`, `metric_definition_version` по умолчанию).
-- `src/d2intel/api/snapshots.py` — добавлен `PROSPECTIVE_MODE` и параметры
-  режима; `write_feature_snapshot` теперь **явно отвергает** сочетание
-  `prospective_observed` + `assumed_available_at` (иначе нарушался
-  `feature_snapshot_lag_policy`), для ретро-режима поведение не изменилось.
-
-**Реальный прогон:** заморозка `ce679e76` — Natus Vincere vs Aurora Gaming,
-cutoff `2026-09-26T14:58:15Z`, **p_a = 0.4688** (Na'Vi — Team A по каноническому
-порядку). `prospective_reconcile.py --all` → `pending`: игры после cutoff в БД
-ещё нет (последняя игра `2026-09-26 13:45 +03`). Связывание произойдёт, когда
-матч доиграют и он появится в источнике; доигранные игры 25–26 Sep между этими
-командами пока `map_index_unresolved` (серия не закрыта) — их скрипт
-**не** связывает, потому что map1 не доказана.
-
-**Найдено и исправлено в чужом незавершённом коде:** (1) reconcile писал
-`prediction_evaluation` своим INSERT без `metric_definition_version` (NOT NULL в
-схеме) с неверным `ON CONFLICT` — заменён на идемпотентный `record_evaluation`;
-(2) `prospective_observed` получал `assumed_available_at = cutoff` вместо NULL —
-вставка упала бы на constraint.
-
-**Нюанс для владельца:** целевая игра должна быть **game1**. Пока серия не
-закрыта в наших данных, `map_number` остаётся NULL и reconcile честно ждёт —
-это следствие правила «неполная серия не получает номеров карт», а не баг.
-
-**Проверки:** `ruff src tests scripts` — 6 старых `UP038` (новых нет);
-`mypy src` — 4 старых union-attr (новых нет); `mypy` новых скриптов — чисто;
-`pytest` безопасного набора (без деструктивных `test_migrations`/
-`test_constraints`) — **357 passed** (+6 новых `tests/api/test_prospective.py`:
-запрет assumed в prospective, NULL в снимке, ретро-режим не сломан, reconcile
-находит game1, pending при отсутствии игры, отказ при недоказанном map index).
-Схема БД не менялась. Runtime-код API менялся (`snapshots.py`) — для
-prospective-пути используется только из скриптов, перезапуск сервера не
-обязателен, но желателен перед следующими вызовами `/predict`.
-
-- CURRENT EPIC: `EPIC 12 — Prediction API`
-- CURRENT TASK: prospective-прогон Wallachia — **вариант C реализован**;
-  заморозка `ce679e76` (Na'Vi vs Aurora, p_a 0.4688) ждёт появления
-  доигранной game1 в источнике. API-001 и head-sync выполнены.
-- NEXT ACTION: когда матч доиграют — `python scripts/ingest_opendota_once.py
-  --head` (или обычный прогон) → `python scripts/normalize_once.py` →
-  `python scripts/prospective_reconcile.py --all`, затем честный отчёт
-  (попал/не попал, log_loss, brier). Пока матч не доигран — **ждать**;
-  публиковать 33 незапушенных коммита (включая merge
-  `feat/first-intelligence-dashboard`) — только по команде владельца.
-- Решение о варианте C зафиксировано рабочим кодом; если владелец хочет
-  сделать prospective-цель частью схемы постоянно — нужен отдельный ADR
-  (вариант A), сам собой он не появится.
-
-## Продуктовые ориентиры и gates
-
-Статусы решений проверять в `docs/PRD.md` и соответствующих ADR; перечисление стека не переводит Proposed ADR в Accepted.
-
-1. Цель прогноза MVP: **P(Team A выигрывает первую карту серии | карта сыграна), до драфта** — не исход всей серии.
-2. **Snapshots и temporal-версии — с первого прототипа**, а не в MVP 2.
-3. Стек: Python-монолит + PostgreSQL (typed canonical + JSONB raw/snapshots) + FastAPI + pandas; Logistic Regression как baseline, CatBoost — challenger, **не обязанный победить**; без Redis/Celery/Kafka/Kubernetes/feature store.
-4. Источники: OpenDota history — основная ставка; Liquipedia API — только после gate по правам/доступу/покрытию; PandaScore — исключён до письменного разрешения провайдера (проект содержит market-анализ).
-5. Первые 10 задач: `PRD-001 → SRC-001 → INF-001 → DB-001 → ING-001 → DATA-001 → FEAT-001 → ML-001 → API-001 → UI-001`. Это **ретроспективный** вертикальный срез, не полноценный pre-match MVP.
-
-## Как работать
-
-1. Прочитать `AGENTS.md`, этот handoff и документы назначенной задачи. Репозиторий — источник контекста; `HANDOFF.md` является архивом.
-2. Не выдавать владельцу 50 задач сразу: определять CURRENT EPIC → CURRENT TASK → WHY IT MATTERS → DEPENDENCIES → NEXT ACTION и вести последовательно.
-3. Large task → дробить. Не нужна задачу для MVP → сказать прямо. Новую фичу оценивать по impact / complexity / data requirements / ML value / product value / maintenance cost, но решение оставлять владельцу.
-4. Workflow на каждую задачу: назначение → код/архитектура → план → тесты/реализация → проверки → review → обновлённый handoff → согласованные commit/push → локальный запуск/обновление и health. Подробности и критерии завершения — `AGENTS.md`.
-5. Архитектурная проблема → STOP → объяснение → альтернативы → ожидание решения владельца (+ ADR).
-
-## Чего делать нельзя
-
-1. Начинать писать код без явной команды владельца.
-2. Объявлять ретроспективную реконструкцию «настоящим прогнозом» или backdated live-прогнозом.
-3. Использовать данные с `available_at > cutoff`; подставлять фактический состав целевого матча и финальную статистику в pre-match признаки.
-4. Обещать точность, калибровку, прибыльность, SLA или свежесть — ни один бесплатный источник не даёт гарантий, метрик проекта ещё не существует.
-5. Строить critical path на непроверенном источнике или обходить ToS/авторизацию, выдумывать credentials.
-6. Автоматически размещать ставки: market-модуль — **ANALYSIS only**.
-7. Молча менять архитектуру.
-
-## Что внутри пакета
-
-- `AGENTS.md` — действующие правила работы; `REPO_SETUP.md` — Git и локальный запуск.
-- `HANDOFF.md` — историческая консолидированная копия (Part 1–13), не обновляется как текущий статус.
-- `PRODUCT.md`, `ARCHITECTURE.md`, `DATA_MODEL.md`, `FEATURES.md`, `ML.md`, `EXPERT_ENGINE.md`, `LIVE.md`, `BACKTEST.md` — архитектура по слоям.
-- `docs/FEATURE_DATASET.md` — контракт prior-form датасета (`FEAT-001`).
-- `SOURCES.md` — исследование источников и сравнение reference-проектов (включая NUKI1223/dota-predictor и amarcu/dota-predictor).
-- `BACKLOG.md` — 90 задач по 23 эпикам (00–22) с зависимостями, acceptance criteria и DoD.
-- `FIRST_10_TASKS.md` — первые ровно 10 задач.
-- `docs/adr/` — ADR-001…ADR-005.
+Дальше: проверить текущее состояние Git и принадлежность runtime процесса → выбрать тестовое окружение согласно `REPO_SETUP.md` → просмотреть изменения → только затем согласовать запуск UI/DB integration/deploy с владельцем.

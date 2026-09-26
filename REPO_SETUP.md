@@ -66,9 +66,11 @@ python -m venv .venv
 
 ```powershell
 Invoke-RestMethod -Uri 'http://127.0.0.1:8000/health' -TimeoutSec 5
+# Затем откройте http://127.0.0.1:8000/ в браузере; это локальный UI.
+# Сводка: /api/overview · матчи: /api/matches · snapshots: /api/predictions
 ```
 
-Успех — HTTP 200, `status: ok`, `database: up`. HTTP 503 или занятый порт не считать успешным запуском. `/health` не проверяет готовность feature/model/data слоя. UI пока нет.
+Успех — HTTP 200, `status: ok`, `database: up`. HTTP 503 или занятый порт не считать успешным запуском. `/health` не проверяет готовность feature/model/data слоя. Локальная UI-рабочая область раздаётся FastAPI на `/`; документация OpenAPI остаётся на `/docs`.
 
 Для фонового процесса можно использовать PowerShell `Start-Process` с `-WindowStyle Hidden`, абсолютным путём к Python из `.venv`, `-WorkingDirectory` корня клона и перенаправлением stdout/stderr в игнорируемые `*.log`. Записать возвращённый PID локально; перед остановкой проверить PID, путь Python, командную строку и слушающий порт. Не останавливать все процессы Python или чужой процесс по одному совпадению порта.
 
