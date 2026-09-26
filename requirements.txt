@@ -18,10 +18,13 @@ sqlalchemy==2.0.36
 alembic==1.14.1
 psycopg[binary]==3.2.3
 
-# --- Dataframe / ML (присутствуют в стеке, доменной логики нет) ---
+# --- Dataframe / ML ---
 pandas==2.2.3
-pyarrow==18.1.0
 scikit-learn==1.6.1
+# numpy и joblib импортируются кодом напрямую (src/d2intel/api/predict.py,
+# src/d2intel/api/snapshots.py); фиксируем версии, с которыми проверен прогон.
+numpy==2.4.6
+joblib==1.6.0
 
 # --- HTTP-клиент / схемы ---
 httpx==0.28.1
