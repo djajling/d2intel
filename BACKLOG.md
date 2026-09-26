@@ -820,7 +820,7 @@
 - **EPIC:** 08 — Patch intelligence
 - **STAGE:** MVP
 - **PRIORITY:** P1
-- **STATUS:** Planned
+- **STATUS:** Done (2026-09-26). `src/d2intel/features/prior_form.py`: patch_weight переведён на затухание по патч-расстоянию (`patch_decay ** |ord(prior)−ord(target)|`, порядок патчей из PATCH-001 через `fetch_patch_order`); `patch_decay=None` — legacy same/other, инференс восстанавливает decay из гиперпараметров версии (train/serve без скоу для старого champion); маска `target_patch_unknown` отличает отсутствие патча от нулевого веса; новый признак `d_team_same_patch_n` (колонок 10). Веса: из данных не фнтся (`PriorFormParams.fit` трогает только μ), decay — гиперпараметр, выбран на valid (грид 0.6/0.75/0.9 → 0.6, различия в 5-м знаке — нематериален); таблица весов по расстояниям и версия `patch-weight.v2` — в manifest ревизии 3 и отчёте `docs/ml/ML002_run_2026-09-26_v3.json`. Прогон (CHALLENGER.md §v3): LR 10 признаков 0.5714/0.6878, CatBoost 0.5429/0.6913, парная разница CI95 [−0.013, +0.021] — значимого сдвига нет, порог 0.70 не достигнут, champion не меняется. Известный край: run_key по умолчанию производен от хэша сплита (коллизия с v2 — снята документированием, для будущих прогонов `--run-key` явно). Отклонение пути: `src/features/patch_weight.py` → интеграция в `prior_form.py` (веса применяются внутри билдера, отдельный модуль дал бы train/serve разрыв).
 - **GOAL:** Ввести взвешивание исторических примеров по патчам и маски отсутствия данных.
 - **CONTEXT:** Требование полного MVP: patch weighting + missing masks; веса не должны зависеть от целевого матча.
 - **INPUT:** `FEAT-001`, `PATCH-001`.
