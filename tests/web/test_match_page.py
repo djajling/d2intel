@@ -300,20 +300,12 @@ def test_match_page_unknown_game_returns_404(
     assert response.status_code == 404
 
 
-def test_index_redirects_to_latest_match(
-    app_client: TestClient,
-    db_session: Session,
-    game_fixture: dict[str, str],
-    lr_model_version: dict[str, Any],
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """`GET /` ведёт на страницу последнего рассчитанного снимка."""
-    game_id = _with_prediction(app_client, db_session, game_fixture, lr_model_version, monkeypatch)
+def test_root_serves_static_workbench(app_client: TestClient) -> None:
+    """`GET /` отдаёт статический workbench владельца (мерж 542e94e).
 
+    Статика монтируется последней, поэтому API и /match/{game_id} имеют
+    приоритет; корень отдаёт site/index.html без перенаправлений.
+    """
     response = app_client.get("/", follow_redirects=False)
-    assert response.status_code == 307
-    assert f"/match/{game_id}" in response.headers["location"]
-
-    followed = app_client.get("/", follow_redirects=True)
-    assert followed.status_code == 200
-    assert "Team A" in followed.text
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]

@@ -87,28 +87,6 @@ LATEST_SNAPSHOT_SQL = """
 """
 
 
-@router.get("/", response_class=HTMLResponse)
-def index(db: Session = Depends(get_db)) -> Response:  # noqa: B008
-    """Открыть последний рассчитанный снимок; если снимков нет — подсказка."""
-    row = db.execute(
-        text(
-            "SELECT p.target_game_id FROM prediction AS p "
-            "JOIN prediction_snapshot AS ps ON ps.prediction_id = p.id "
-            "ORDER BY ps.computed_at DESC, ps.snapshot_seq DESC LIMIT 1"
-        )
-    ).first()
-    if row is None or row.target_game_id is None:
-        return HTMLResponse(
-            "<!doctype html><html lang='ru'><head><meta charset='utf-8'>"
-            "<title>d2intel</title></head><body><h1>d2intel</h1>"
-            "<p>Снимков прогнозов ещё нет. Создайте первый: POST"
-            " /predict/game/{game_id}, затем откройте /match/{game_id}.</p>"
-            "</body></html>",
-            status_code=status.HTTP_200_OK,
-        )
-    return RedirectResponse(f"/match/{row.target_game_id}", status_code=307)
-
-
 @router.get("/match/{game_id}", response_class=HTMLResponse)
 def match_page(
     game_id: UUID, request: Request, db: Session = Depends(get_db)  # noqa: B008
