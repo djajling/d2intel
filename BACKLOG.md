@@ -1024,7 +1024,7 @@
 - **EPIC:** 11 — Calibration
 - **STAGE:** MVP
 - **PRIORITY:** P1
-- **STATUS:** Planned
+- **STATUS:** Done (2026-09-26). `src/d2intel/evaluation/calibration.py` (carve_calibration_split: tuning/purge/calibration из хвоста valid с embargo, assign, cross-fit выбор метода) + `scripts/run_calibration.py`; границы — в docs/CALIBRATION.md (таблица частей + реестр чтений test). Отклонение пути: `src/eval/split.py` → `src/d2intel/evaluation/calibration.py`, протокол+отчёт объединены в `docs/CALIBRATION.md` вместо двух файлов.
 - **GOAL:** Реализовать строгий четырёхчастный протокол оценки по сериям с purge.
 - **CONTEXT:** Калибровка не должна фититься на том же наборе, что и выбор модели; untouched test трогается один раз.
 - **INPUT:** `ML-001`.
@@ -1040,7 +1040,7 @@
 - **EPIC:** 11 — Calibration
 - **STAGE:** MVP
 - **PRIORITY:** P1
-- **STATUS:** Planned
+- **STATUS:** Done (2026-09-26) с честным отрицательным вердиктом. Калибраторы фнтятся только на calibration-части (76 строк), метод — 2-фолдный cross-fit (Platt 0.680 vs isotonic 1.616 — изотоник переобучается), метрики до/после на untouched test: калибровка УХУДШАЕТ (log_loss 0.6877→0.7251, ECE 0.0478→0.0949, accuracy 0.5643→0.5071). **Калибровка не внедряется**, champion остаётся некалибрированным LR; повторный прогон — при заметном росте объёма valid/покрытия. CAL-003 отложена до положительного прогона. Ограничение зафиксировано: C выбирался на полном valid — строгая ревизия (C только на tuning) обязательна для следующего прогона. Отчёт: docs/CALIBRATION.md.
 - **GOAL:** Откалибровать вероятности и измерить качество калибровки.
 - **CONTEXT:** Изотоник/Platt фитятся только на калибровочной части; **выбор метода калибровки — на tuning/calibration-фолдах, untouched test — только итоговый гейт**. Калибровка — отдельный шаг и не участвует в выборе победителя между LR и CatBoost.
 - **INPUT:** `CAL-001`.
