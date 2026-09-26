@@ -35,7 +35,7 @@
 - [ADR-006: цель прогноза и фаза расчёта](docs/adr/ADR-006-target-and-phase.md)
 - [ADR-007: порог приёмки модели](docs/adr/ADR-007-model-acceptance-threshold.md)
 
-`ADR-001` (database) и `ADR-005` (prediction snapshots) — **Accepted** (утверждены владельцем 2026-09-21, реализация — `DB-001`); `ADR-002`…`ADR-004`, `ADR-006` (цель прогноза) и `ADR-007` (порог приёмки модели) — Proposed. Product spec v0 (`docs/PRD.md`) и временная семантика (`docs/PRD_TEMPORAL.md`) утверждены владельцем. Внутренние task IDs ссылаются на BACKLOG.md; для выполненных задач пути FILES EXPECTED TO CHANGE соответствуют реально созданным файлам.
+`ADR-001` (database) и `ADR-005` (prediction snapshots) — **Accepted** (2026-09-21, реализация — `DB-001`); `ADR-006` (цель прогноза, вариант C — Gate-1 pre-draft/карта 1 → Gate-2 post-draft/карта N) и `ADR-007` (порог приёмки 0.70 для моделей с 2026-09-26) — **Accepted** (2026-09-26); `ADR-002`…`ADR-004` — Proposed. Product spec v0 (`docs/PRD.md`) и временная семантика (`docs/PRD_TEMPORAL.md`) утверждены владельцем. Внутренние task IDs ссылаются на BACKLOG.md; для выполненных задач пути FILES EXPECTED TO CHANGE соответствуют реально созданным файлам.
 
 **Цель прогноза (вердикт ADR-006, 2026-09-26 — Accepted, вариант C):** Gate-1 (MVP) —
 pre-draft, карта 1; Gate-2 — post-draft, карта N отдельным гейтом, его проспективный продукт
