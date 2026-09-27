@@ -56,92 +56,28 @@ def find_live_game(
     *,
     team_a: str,
     team_b: str,
-    league_id: int | None = None,
+    accounts_a: set[int] | None = None,
+    accounts_b: set[int] | None = None,
 ) -> dict[str, Any] | None:
-    """Найти живую игру по team_name игроков; fallback — league_id.
+    """Найти нашу живую игру по пересечению account_id ИГРОКОВ.
 
-    Совпадение: в одной игре встречаются игроки обеих команд (по подстроке,
-    без регистра). Названия команд уровня игры в /live часто NULL.
+    Имена команд уровня игры в /live бывают NULL, а фоллбек «по лиге» выдал
+    бы чужой матч — единственный честный ключ: известные account_id игроков
+    обеих команд (roster evidence из нашей БД). Порог: >=4 совпадений
+    суммарно при наличии игроков обеих сторон.
     """
-    a, b = team_a.strip().lower(), team_b.strip().lower()
-    # Только точное совпадение по team_name ИГРОКОВ обеих команд.
-    # Фоллбек по league_id запрещён: лига может идти параллельно в нескольких
-    # играх — выдать чужой драфт за наш было бы подменой (честность ADR-008).
+    accounts_a = accounts_a or set()
+    accounts_b = accounts_b or set()
+    best: tuple[int, dict[str, Any]] | None = None
     for game in games:
-        players = game.get("players", [])
-        names = [_side_name(p).lower() for p in players]
-        has_a = any(a in name or name in a for name in names if name)
-        has_b = any(b in name or name in b for name in names if name)
-        if has_a and has_b:
-            return game
-    return None
+        ids = {p.get("account_id") for p in game.get("players", [])}
+        overlap = len((ids & accounts_a) | (ids & accounts_b))
+        both_sides = bool(ids & accounts_a) and bool(ids & accounts_b)
+        if overlap >= 4 and both_sides and (best is None or overlap > best[0]):
+            best = (overlap, game)
+    return best[1] if best else None
 
 
-
-# --------------------------------------------------------------------------- #
-# STRATZ (платный лимит free-tier): live с пиками и банами — по ключу владельца
-# ---------------------------------------------------------------------------
-
-STRATZ_GRAPHQL = "https://api.stratz.com/graphql"
-
-
-def _stratz_key() -> str | None:
-    """Ключ STRATZ из .env корня репозитория (в git не попадает)."""
-    env_path = Path(__file__).resolve().parents[3] / ".env"
-    if not env_path.exists():
-        return None
-    for line in env_path.read_text(encoding="utf-8").splitlines():
-        if line.startswith("STRATZ_API_KEY="):
-            return line.split("=", 1)[1].strip() or None
-    return None
-
-
-def stratz_live_match(
-    *,
-    team_a: str,
-    team_b: str,
-    client: httpx.Client | None = None,
-) -> dict[str, Any] | None:
-    """Живой матч STRATZ с пиками и банами, если игра найдена.
-
-    Ограничения free-tier жёсткие (проба 2026-09-27: блок по IP до 15 минут) —
-    вызывать НЕ чаще раза в минуту и только когда игра реально идёт.
-    """
-    key = _stratz_key()
-    if key is None:
-        return None
-    client = client or httpx.Client()
-    query = {
-        "query": (
-            "{ live { matches { matchId gameState gameTime "
-            "league { id displayName } "
-            "radiantTeam { name } direTeam { name } "
-            "players { heroId slot team } } } }"
-        )
-    }
-    response = client.post(
-        STRATZ_GRAPHQL,
-        json=query,
-        headers={
-            "Authorization": f"Bearer {key}",
-            "User-Agent": "STRATZ_API",
-            "Content-Type": "application/json",
-        },
-        timeout=30,
-    )
-    if response.status_code == 403:
-        raise ValueError(f"STRATZ rate limit: {response.text[:150]}")
-    response.raise_for_status()
-    matches = response.json()["data"]["live"]["matches"]
-    a, b = team_a.strip().lower(), team_b.strip().lower()
-    for match in matches:
-        ra = ((match.get("radiantTeam") or {}).get("name") or "").lower()
-        di = ((match.get("direTeam") or {}).get("name") or "").lower()
-        if (a in ra or ra in a) and (b in di or di in b):
-            return match
-        if (a in di or di in a) and (b in ra or ra in b):
-            return match
-    return None
 def draft_progress(
     game: dict[str, Any], hero_names: dict[int, str]
 ) -> dict[str, Any]:
@@ -176,16 +112,20 @@ def draft_progress(
     }
 
 
-def live_draft_for(
+def live_match_view(
     *,
     team_a: str,
     team_b: str,
-    league_id: int | None = None,
+    accounts_a: set[int] | None = None,
+    accounts_b: set[int] | None = None,
     client: httpx.Client | None = None,
 ) -> dict[str, Any]:
-    """Полный ответ для UI: нашли игру или честно «ещё не появилась»."""
+    """Полный live-вид матча для UI: команды, счёт убийств, пики по сторонам."""
     games = fetch_live_games(client)
-    game = find_live_game(games, team_a=team_a, team_b=team_b, league_id=league_id)
+    game = find_live_game(
+        games, team_a=team_a, team_b=team_b,
+        accounts_a=accounts_a, accounts_b=accounts_b,
+    )
     hero_names = load_hero_names()
     result: dict[str, Any] = {
         "searching_for": f"{team_a} vs {team_b}",
@@ -193,22 +133,39 @@ def live_draft_for(
         "found": False,
     }
     if game is None:
-        league_games = (
-            [g for g in games if g.get("league_id") == league_id]
-            if league_id is not None
-            else []
-        )
         result["message"] = (
-            "Наша пара пока не опознана в live-фиде OpenDota (фид добавляет "
-            "игры с задержкой, имена команд уровня игры бывают пусты). "
-            + (
-                f"В лиге сейчас идут {len(league_games)} игр(ы), но опознать "
-                "наши команды в них нельзя — показывать чужой драфт не будем."
-                if league_games
-                else "Опрос продолжается."
-            )
+            "Наша пара пока не опознана в live-фиде OpenDota: матч попадает "
+            "в фид через несколько минут после старта, имена команд уровня "
+            "игры бывают пусты — опознаём строго по account_id игроков из "
+            "нашей БД (чужой драфт той же лиги не показываем)."
         )
         return result
-    progress = draft_progress(game, hero_names)
-    result.update({"found": True, **progress})
-    return result
+
+    radiant_players, dire_players = [], []
+    for player in game.get("players", []):
+        hero_id = player.get("hero_id")
+        entry = {
+            "name": player.get("name") or "—",
+            "hero": hero_names.get(int(hero_id)) if hero_id else None,
+            "team_tag": player.get("team_tag"),
+        }
+        if player.get("team") == 0:
+            radiant_players.append(entry)
+        else:
+            dire_players.append(entry)
+    return {
+        "found": True,
+        "series_id": game.get("series_id"),
+        "game_time_seconds": game.get("game_time"),
+        "radiant": {
+            "name": game.get("team_name_radiant") or "Radiant",
+            "kills": game.get("radiant_score"),
+            "players": radiant_players,
+        },
+        "dire": {
+            "name": game.get("team_name_dire") or "Dire",
+            "kills": game.get("dire_score"),
+            "players": dire_players,
+        },
+        "note": "KDA/items/bans в /api/live отсутствуют (глубина платных фидов); полный драфт с банами — в карточке после каждой доигранной карты",
+    }

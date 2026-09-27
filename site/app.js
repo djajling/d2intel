@@ -1146,27 +1146,38 @@ async function loadPortalSchedule(force = false) {
   }
 }
 
-function renderLiveDraft(data) {
-  const container = $('#live-draft-list');
-  if (!container) return;
+function renderLiveDraftInto(container, data) {
   container.replaceChildren();
   if (!data.found) {
     container.append(el('p', 'schedule-empty', data.message || 'Матч не найден в live-фиде.'));
     return;
   }
-  const head = el('p', 'schedule-teams');
-  head.append(el('span', 'table-primary', `${data.radiant_team || 'Radiant'} vs ${data.dire_team || 'Dire'}`));
-  head.append(el('span', 'table-secondary', `серия ${data.series_id || '—'} · игра идёт ${Math.floor((data.game_time_seconds || 0) / 60)} мин · счёт ${data.radiant_score ?? '—'}:${data.dire_score ?? '—'} · пиков ${data.picks_count}/10`));
-  container.append(head);
-  const sides = [['Radiant', data.radiant_picks], ['Dire', data.dire_picks]];
-  for (const [sideName, picks] of sides) {
-    const side = el('p', 'schedule-meta');
-    side.append(el('span', 'table-primary', `${sideName}:`));
-    const heroList = picks.filter((p) => p.hero).map((p) => p.hero);
-    if (heroList.length) side.append(el('span', 'table-secondary', heroList.join(', ')));
-    else side.append(el('span', 'table-secondary', 'пиков пока нет'));
-    container.append(side);
+  const head = el('div', 'live-head');
+  const left = el('div', 'live-side');
+  left.append(el('span', 'table-primary', data.radiant.name));
+  const score = el('span', 'live-score', `${data.radiant.kills ?? '—'} : ${data.dire.kills ?? '—'}`);
+  const right = el('div', 'live-side');
+  right.append(el('span', 'table-primary', data.dire.name));
+  head.append(left, score, right);
+  const clock = el('p', 'schedule-empty', `Игра идёт ${Math.floor((data.game_time_seconds || 0) / 60)} мин · серия ${data.series_id || '—'} · пиков ${(data.radiant.players.length + data.dire.players.length)}/10`);
+  container.append(head, clock);
+  for (const side of [data.radiant, data.dire]) {
+    const sideBlock = el('div', 'live-team');
+    sideBlock.append(el('p', 'schedule-meta', side.name));
+    for (const player of side.players) {
+      const rowLine = el('p', 'live-player');
+      rowLine.append(el('span', 'table-primary', player.hero || 'пик не виден'));
+      rowLine.append(el('span', 'table-secondary', player.name));
+      sideBlock.append(rowLine);
+    }
+    container.append(sideBlock);
   }
+  if (data.note) container.append(el('p', 'schedule-empty', data.note));
+}
+
+function renderLiveDraft(data) {
+  const containers = [$('#live-draft-list'), $('#live-draft-main-list')].filter(Boolean);
+  for (const container of containers) renderLiveDraftInto(container, data);
 }
 
 async function loadLiveDraft() {

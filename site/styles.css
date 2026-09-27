@@ -333,3 +333,9 @@ h1, h2, h3, p { overflow-wrap: anywhere; }
 
 .schedule-external { margin-top: 22px; border-top: 1px solid var(--line); padding-top: 16px; }
 .schedule-external .section-description { max-width: 720px; }
+
+.live-head { display: flex; align-items: center; justify-content: center; gap: 16px; margin-bottom: 8px; }
+.live-side { display: flex; flex-direction: column; align-items: center; }
+.live-score { font-size: 30px; font-weight: 800; color: var(--accent, #d97706); }
+.live-team { margin: 10px 0; }
+.live-player { display: flex; justify-content: space-between; gap: 12px; border-top: 1px solid rgba(255,255,255,.08); padding: 5px 0; margin: 0; font-size: 13px; }

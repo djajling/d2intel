@@ -37,7 +37,7 @@ from d2intel.ingestion.liquipedia_schedule import (
     refresh_matches_portal,
     refresh_schedule,
 )
-from d2intel.ingestion.live_draft import live_draft_for
+from d2intel.ingestion.live_draft import live_match_view, load_hero_names
 
 router = APIRouter(prefix="/api/schedule", tags=["schedule"])
 
@@ -418,6 +418,72 @@ def auto_freeze(db: Session = Depends(get_db)) -> dict[str, Any]:  # noqa: B008
     }
 
 
+def _stratz_key() -> str | None:
+    """Ключ STRATZ из .env (в git не попадает)."""
+    env_path = REPO_ROOT / ".env"
+    if not env_path.exists():
+        return None
+    for line in env_path.read_text(encoding="utf-8").splitlines():
+        if line.startswith("STRATZ_API_KEY="):
+            return line.split("=", 1)[1].strip() or None
+    return None
+
+
+def _stratz_live_match(
+    *, team_a: str, team_b: str, client: httpx.Client
+) -> dict[str, Any] | None:
+    """Живой матч STRATZ (пики+банs если есть). Лимит free-tier жёсткий."""
+    key = _stratz_key()
+    if key is None:
+        return None
+    query = {
+        "query": (
+            "{ live { matches { matchId gameState gameTime "
+            "league { id displayName } radiantTeam { name } direTeam { name } "
+            "players { heroId slot team } } } }"
+        )
+    }
+    response = client.post(
+        "https://api.stratz.com/graphql",
+        json=query,
+        headers={
+            "Authorization": f"Bearer {key}",
+            "User-Agent": "STRATZ_API",
+            "Content-Type": "application/json",
+        },
+        timeout=30,
+    )
+    if response.status_code == 403:
+        raise ValueError(f"STRATZ rate limit: {response.text[:120]}")
+    response.raise_for_status()
+    a, b = team_a.strip().lower(), team_b.strip().lower()
+    for match in response.json()["data"]["live"]["matches"]:
+        ra = ((match.get("radiantTeam") or {}).get("name") or "").lower()
+        di = ((match.get("direTeam") or {}).get("name") or "").lower()
+        if (a in ra or ra in a) and (b in di or di in b):
+            return match
+        if (a in di or di in a) and (b in ra or ra in b):
+            return match
+    return None
+
+
+def _team_accounts(db: Session, label: str) -> set[int]:
+    """Известные account_id игроков команды (roster evidence из нашей БД)."""
+    rows = db.execute(
+        text(
+            """
+            SELECT DISTINCT p.account_id
+            FROM roster_membership rm
+            JOIN team t ON t.id = rm.team_id
+            JOIN player p ON p.id = rm.player_id
+            WHERE t.canonical_name = :label AND p.account_id IS NOT NULL
+            """
+        ),
+        {"label": label},
+    ).scalars()
+    return {int(a) for a in rows}
+
+
 @router.get("/live-draft")
 def live_draft_snapshot(db: Session = Depends(get_db)) -> dict[str, Any]:  # noqa: B008
     """Живой драфт для ближайшей замороженной фикстуры (ADR-008 фаза 2)."""
@@ -433,75 +499,59 @@ def live_draft_snapshot(db: Session = Depends(get_db)) -> dict[str, Any]:  # noq
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Нет замороженных фикстур для live-наблюдения",
         )
-    # Приоритет: STRATZ (пики + баны, лимит free-tier жёсткий — раз в минуту),
-    # fallback OpenDota /live (только пики).
-    stratz_match = None
-    stratz_error = None
-    try:
-        from d2intel.ingestion.live_draft import stratz_live_match
+    accounts_a = _team_accounts(db, row.team_a_label)
+    accounts_b = _team_accounts(db, row.team_b_label)
 
-        stratz_match = stratz_live_match(
+    # Приоритет 1: STRATZ (пики+баны; лимит free-tier жёсткий — не чаще раза в минуту).
+    try:
+        stratz_match = _stratz_live_match(
             team_a=row.team_a_label, team_b=row.team_b_label, client=httpx.Client()
         )
     except (httpx.HTTPError, ValueError) as exc:
-        stratz_error = str(exc)[:200]
+        stratz_match, stratz_note = None, f"STRATZ недоступен: {str(exc)[:120]}. "
+    else:
+        stratz_note = ""
     if stratz_match is not None:
-        league = stratz_match.get("league") or {}
-        result: dict[str, Any] = {
-            "searching_for": f"{row.team_a_label} vs {row.team_b_label}",
-            "found": True,
-            "source": "stratz",
-            "series_id": stratz_match.get("matchId"),
-            "league_name": (league or {}).get("displayName"),
-            "game_time_seconds": stratz_match.get("gameTime"),
-            "radiant_score": stratz_match.get("radiantScore"),
-            "dire_score": stratz_match.get("direScore"),
-            "radiant_team": (stratz_match.get("radiantTeam") or {}).get("name"),
-            "dire_team": (stratz_match.get("direTeam") or {}).get("name"),
-            "radiant_picks": [],
-            "dire_picks": [],
-            "picks_count": 0,
-            "note": "Драфт из STRATZ (пики; баны — если поле присутствует в live-схеме)",
-        }
-        picks_total = 0
-        from d2intel.ingestion.live_draft import load_hero_names
-
         hero_names = load_hero_names()
+        radiant_players: list[dict[str, Any]] = []
+        dire_players: list[dict[str, Any]] = []
         for player in stratz_match.get("players", []):
             hero_id = player.get("heroId")
             entry = {
-                "player": None,
-                "account_id": None,
-                "hero_id": hero_id,
+                "name": "—",
                 "hero": hero_names.get(int(hero_id)) if hero_id else None,
-                "slot": player.get("slot"),
-                "team": player.get("team"),
+                "team_tag": None,
             }
-            picks_total += 1 if hero_id else 0
-            (result["radiant_picks"] if player.get("team") == 0 else result["dire_picks"]).append(entry)
-        result["picks_count"] = picks_total
-        result["hero_names_missing"] = True
-        return result
-    if stratz_error:
+            (radiant_players if player.get("team") == 0 else dire_players).append(entry)
         return {
-            "searching_for": f"{row.team_a_label} vs {row.team_b_label}",
-            "found": False,
+            "found": True,
             "source": "stratz",
-            "message": f"STRATZ недоступен ({stratz_error}); повтор по лимиту free-tier.",
+            "series_id": stratz_match.get("matchId"),
+            "game_time_seconds": stratz_match.get("gameTime"),
+            "radiant": {
+                "name": (stratz_match.get("radiantTeam") or {}).get("name") or "Radiant",
+                "kills": stratz_match.get("radiantScore"),
+                "players": radiant_players,
+            },
+            "dire": {
+                "name": (stratz_match.get("direTeam") or {}).get("name") or "Dire",
+                "kills": stratz_match.get("direScore"),
+                "players": dire_players,
+            },
+            "note": "Данные STRATZ (пики; баны — если присутствуют в live-схеме)",
         }
-    league_id = 20176 if "Wallachia" in (row.tournament_label or "") else None
-    try:
-        return live_draft_for(
-            team_a=row.team_a_label,
-            team_b=row.team_b_label,
-            league_id=league_id,
-            client=httpx.Client(),
-        )
-    except httpx.HTTPError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"OpenDota live недоступен: {exc}",
-        ) from exc
+
+    # Приоритет 2: OpenDota /api/live (только пики), опознание по account_id.
+    result = live_match_view(
+        team_a=row.team_a_label,
+        team_b=row.team_b_label,
+        accounts_a=accounts_a,
+        accounts_b=accounts_b,
+        client=httpx.Client(),
+    )
+    if stratz_note:
+        result["message"] = f"{stratz_note} {result.get('message', '')}".strip()
+    return result
 
 
 @router.post("/{fixture_id}/draft")
