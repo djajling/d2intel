@@ -37,6 +37,7 @@ from d2intel.ingestion.liquipedia_schedule import (
     refresh_matches_portal,
     refresh_schedule,
 )
+from d2intel.ingestion.live_draft import live_draft_for
 
 router = APIRouter(prefix="/api/schedule", tags=["schedule"])
 
@@ -260,6 +261,153 @@ def external_matches_portal(
             detail=f"Liquipedia недоступен ({exc}). Ручное расписание работает.",
         ) from exc
     return data
+
+
+@router.post("/auto-freeze")
+def auto_freeze(db: Session = Depends(get_db)) -> dict[str, Any]:  # noqa: B008
+    """Авто-заморозка (разрешение владельца 2026-09-27): портал → импорт → freeze.
+
+    Идемпотентно и безопасно для повторных вызовов:
+    1. Новые предстоящие матчи Wallachia с портала импортируются (без дублей
+       по паре команд среди upcoming).
+    2. Фикстуры, до старта которых осталось <= 10 минут, замораживаются
+       (через тот же честный CLI; после старта — не замораживаются никогда).
+    3. Фикстуры, чей старт прошёл без заморозки, помечаются `missed_start`
+       вместо фальшивой заморозки.
+    """
+    from datetime import UTC, datetime, timedelta
+
+    now = datetime.now(UTC)
+    imported: list[dict[str, Any]] = []
+    frozen: list[dict[str, Any]] = []
+    skipped: list[dict[str, Any]] = []
+
+    # 1. Портал: новые upcoming-матчи Wallachia → импорт без дублей.
+    cache_path = CACHE_DIR / "liquipedia_matches_portal.json"
+    try:
+        portal = refresh_matches_portal(cache_path, client=httpx.Client())
+    except (httpx.HTTPError, ValueError, OSError) as exc:
+        portal = {"matches": [], "page_errors": [str(exc)]}
+    existing_labels = {
+        (row[0].strip().lower(), row[1].strip().lower())
+        for row in db.execute(
+            text(
+                "SELECT team_a_label, team_b_label FROM scheduled_match "
+                "WHERE status = 'upcoming'"
+            )
+        ).all()
+    }
+    for match in portal.get("matches", []):
+        if match.get("finished"):
+            continue
+        if "Wallachia" not in (match.get("tournament") or ""):
+            continue
+        pair = (match["teams"][0].strip().lower(), match["teams"][1].strip().lower())
+        if pair in existing_labels:
+            continue
+        row = db.execute(
+            text(
+                """
+                INSERT INTO scheduled_match
+                    (tournament_label, team_a_label, team_b_label, stage_label,
+                     scheduled_at, notes)
+                VALUES
+                    (:tournament, :team_a, :team_b, :stage, :scheduled_at, :notes)
+                RETURNING id
+                """
+            ),
+            {
+                "tournament": match.get("tournament") or "Liquipedia",
+                "team_a": match["teams"][0],
+                "team_b": match["teams"][1],
+                "stage": f"Bo{match['bestof']}" if match.get("bestof") else None,
+                "scheduled_at": (
+                    datetime.fromisoformat(match["started_at"])
+                    if match.get("started_at")
+                    else None
+                ),
+                "notes": "auto-import from Liquipedia portal (auto-freeze)",
+            },
+        ).scalar_one()
+        existing_labels.add(pair)
+        imported.append({"id": str(row), "teams": f"{match['teams'][0]} vs {match['teams'][1]}"})
+    db.commit()
+
+    # 2. Freeze за 10 минут до старта; после старта — честный skipped.
+    upcoming_rows = db.execute(
+        text(
+            "SELECT id, team_a_label, team_b_label, scheduled_at FROM scheduled_match "
+            "WHERE status = 'upcoming' AND scheduled_at IS NOT NULL"
+        )
+    ).all()
+    for row in upcoming_rows:
+        start = row.scheduled_at
+        if start.tzinfo is None:
+            from datetime import UTC
+
+            start = start.replace(tzinfo=UTC)
+        label = f"{row.team_a_label} vs {row.team_b_label}"
+        if now >= start:
+            db.execute(
+                text(
+                    "UPDATE scheduled_match SET status = 'cancelled', notes = "
+                    "COALESCE(notes || ' | ', '') || 'missed_start: старт прошёл без заморозки', "
+                    "updated_at = now() WHERE id = CAST(:id AS uuid)"
+                ),
+                {"id": str(row.id)},
+            )
+            skipped.append({"teams": label, "reason": "старт уже прошёл — честная заморозка невозможна"})
+            continue
+        if start - now <= timedelta(minutes=10):
+            try:
+                result = freeze_fixture(str(row.id), db)
+                frozen.append(
+                    {
+                        "teams": label,
+                        "freeze_id": result.get("freeze_id"),
+                        "start": start.isoformat(),
+                    }
+                )
+            except HTTPException as exc:
+                skipped.append({"teams": label, "reason": str(exc.detail)[:200]})
+    db.commit()
+    return {
+        "checked_at": now.isoformat(),
+        "imported": imported,
+        "frozen": frozen,
+        "skipped": skipped,
+        "portal_errors": portal.get("page_errors", []),
+    }
+
+
+@router.get("/live-draft")
+def live_draft_snapshot(db: Session = Depends(get_db)) -> dict[str, Any]:  # noqa: B008
+    """Живой драфт для ближайшей замороженной фикстуры (ADR-008 фаза 2)."""
+    row = db.execute(
+        text(
+            "SELECT team_a_label, team_b_label, tournament_label "
+            "FROM scheduled_match "
+            "WHERE status = 'frozen' ORDER BY scheduled_at ASC NULLS LAST LIMIT 1"
+        )
+    ).first()
+    if row is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Нет замороженных фикстур для live-наблюдения",
+        )
+    league_id = 20176 if "Wallachia" in (row.tournament_label or "") else None
+    try:
+        return live_draft_for(
+            team_a=row.team_a_label,
+            team_b=row.team_b_label,
+            league_id=league_id,
+            client=httpx.Client(),
+        )
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"OpenDota live недоступен: {exc}",
+        ) from exc
 
 
 @router.post("/{fixture_id}/draft")

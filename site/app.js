@@ -613,7 +613,7 @@ async function refreshWorkspace({ toast = false } = {}) {
       $('#model-sidebar-status').textContent = describeError(error);
       setHealth(false, 'Локальный API недоступен');
     });
-  await Promise.all([overviewPromise, loadMatches(), loadPredictions(), loadSchedule(), loadPortalSchedule(), checkHealth()]);
+  await Promise.all([overviewPromise, loadMatches(), loadPredictions(), loadSchedule(), loadPortalSchedule(), loadLiveDraft(), checkHealth()]);
   updateTimestamp();
   renderMatches();
   renderPredictions();
@@ -1146,6 +1146,40 @@ async function loadPortalSchedule(force = false) {
   }
 }
 
+function renderLiveDraft(data) {
+  const container = $('#live-draft-list');
+  if (!container) return;
+  container.replaceChildren();
+  if (!data.found) {
+    container.append(el('p', 'schedule-empty', data.message || 'Матч не найден в live-фиде.'));
+    return;
+  }
+  const head = el('p', 'schedule-teams');
+  head.append(el('span', 'table-primary', `${data.radiant_team || 'Radiant'} vs ${data.dire_team || 'Dire'}`));
+  head.append(el('span', 'table-secondary', `серия ${data.series_id || '—'} · игра идёт ${Math.floor((data.game_time_seconds || 0) / 60)} мин · счёт ${data.radiant_score ?? '—'}:${data.dire_score ?? '—'} · пиков ${data.picks_count}/10`));
+  container.append(head);
+  const sides = [['Radiant', data.radiant_picks], ['Dire', data.dire_picks]];
+  for (const [sideName, picks] of sides) {
+    const side = el('p', 'schedule-meta');
+    side.append(el('span', 'table-primary', `${sideName}:`));
+    const heroList = picks.filter((p) => p.hero).map((p) => p.hero);
+    if (heroList.length) side.append(el('span', 'table-secondary', heroList.join(', ')));
+    else side.append(el('span', 'table-secondary', 'пиков пока нет'));
+    container.append(side);
+  }
+}
+
+async function loadLiveDraft() {
+  const container = $('#live-draft-list');
+  if (!container) return;
+  try {
+    const data = await requestJSON('/schedule/live-draft');
+    renderLiveDraft(data);
+  } catch (error) {
+    container.replaceChildren(el('p', 'schedule-empty', describeError(error)));
+  }
+}
+
 function bindSchedule() {
   const form = $('#schedule-form');
   if (!form) return;
@@ -1211,5 +1245,6 @@ function bindSchedule() {
 }
 
 bindSchedule();
+setInterval(loadLiveDraft, 10000);
 bindEvents();
 refreshWorkspace();
