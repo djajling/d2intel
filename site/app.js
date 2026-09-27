@@ -1036,10 +1036,89 @@ async function deleteScheduleFixture(fixtureId) {
   }
 }
 
+function renderExternalSchedule(data) {
+  const container = $('#schedule-external-list');
+  if (!container) return;
+  container.replaceChildren();
+  const meta = el('p', 'schedule-empty', `Источник: Liquipedia (CC BY-SA 3.0) · страница ${data.page} · обновлено ${formatDateTime(data.fetched_at)} · кэш: ${data.cache}`);
+  container.append(meta);
+  const matches = Array.isArray(data.matches) ? data.matches : [];
+  if (!matches.length) {
+    container.append(el('p', 'schedule-empty', 'Liquipedia не вернула матчей (брекет плей-офф может быть ещё не создан). Добавьте фикстуры вручную выше.'));
+    return;
+  }
+  for (const match of matches) {
+    const row = el('article', 'schedule-row');
+    const main = el('div', 'schedule-main');
+    const teams = el('p', 'schedule-teams');
+    teams.append(el('span', 'table-primary', `${match.teams[0]} vs ${match.teams[1]}`));
+    teams.append(el('span', 'table-secondary', match.bestof ? `Bo${match.bestof}` : 'формат неизвестен'));
+    main.append(teams);
+    const metaRow = el('p', 'schedule-meta');
+    metaRow.append(el('span', 'table-secondary', match.started_at_label || match.started_at || 'время неизвестно'));
+    main.append(metaRow);
+    row.append(main);
+    const statusCell = el('div', 'schedule-status');
+    if (match.finished) {
+      statusCell.append(el('span', 'table-primary', match.score ? `${match.score[0]} : ${match.score[1]}` : 'сыграно'));
+      if (match.winner) statusCell.append(el('span', 'table-secondary', `победа ${match.winner}`));
+    } else {
+      statusCell.append(el('span', 'table-secondary', 'предстоит'));
+    }
+    row.append(statusCell);
+    const actions = el('div', 'schedule-actions');
+    if (!match.finished) {
+      const importButton = el('button', 'button button--outline', 'Импортировать');
+      importButton.type = 'button';
+      importButton.dataset.importFixture = JSON.stringify({
+        tournament_label: data.page.replace(/\//g, ' ').trim(),
+        team_a_label: match.teams[0],
+        team_b_label: match.teams[1],
+      });
+      actions.append(importButton);
+    }
+    row.append(actions);
+    container.append(row);
+  }
+}
+
+async function loadExternalSchedule(force = false) {
+  const container = $('#schedule-external-list');
+  if (!container) return;
+  try {
+    const data = await requestJSON(`/schedule/external${force ? '?refresh=true' : ''}`);
+    renderExternalSchedule(data);
+  } catch (error) {
+    container.replaceChildren(el('p', 'schedule-empty', describeError(error)));
+  }
+}
+
 function bindSchedule() {
   const form = $('#schedule-form');
   if (!form) return;
   form.addEventListener('submit', createScheduleFixture);
+  const refreshExternal = $('#schedule-external-refresh');
+  if (refreshExternal) {
+    refreshExternal.addEventListener('click', () => {
+      refreshExternal.disabled = true;
+      loadExternalSchedule(true).finally(() => { refreshExternal.disabled = false; });
+    });
+  }
+  const externalList = $('#schedule-external-list');
+  if (externalList) {
+    externalList.addEventListener('click', async (event) => {
+      const importButton = event.target.closest('[data-import-fixture]');
+      if (!importButton) return;
+      const payload = JSON.parse(importButton.dataset.importFixture);
+      try {
+        await requestJSON('/schedule', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        showToast('Импортировано в ручное расписание — можно заморозить.', 'success');
+        await loadSchedule();
+      } catch (error) {
+        showToast(describeError(error), 'error');
+      }
+    });
+  }
   $('#schedule-list').addEventListener('click', (event) => {
     const freezeButton = event.target.closest('[data-freeze-fixture]');
     if (freezeButton) {

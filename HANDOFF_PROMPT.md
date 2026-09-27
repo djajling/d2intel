@@ -377,6 +377,19 @@ prospective-пути используется только из скриптов
   (display-only, attribution CC-BY-SA, кэш 6–12ч, интервал ≥2c, склейка по ID,
   fallback ручной) — `docs/research/SRC_003_LIVE_SCHEDULE_PROBE.md` +
   `docs/adr/ADR-008-schedule-liquipedia-live.md` (Proposed).
+- **ADR-008 Accepted + Liquipedia-расписание реализовано (2026-09-27, утро).**
+  Владелец прислал URL `PGL/Wallachia/9`; парсер rendered-страниц
+  (`ingestion/liquipedia_schedule.py`, LP2-разметка `brkts-matchlist-match`,
+  регэкспы по `data-team-name`/`data-timestamp`/popup-счёту; тесты на сохранённой
+  фикстуре без сети) + кэш TTL 6ч в `artifacts/cache/` + rate-limit 2с между
+  запросами + attribution CC BY-SA 3.0. API: `GET /api/schedule/external`
+  (`?refresh=true` — принудительно), UI: блок «Внешнее расписание (Liquipedia)»
+  в вкладке Расписание с кнопками «Обновить» и «Импортировать» (LP-строка →
+  ручная фикстура → freeze-поток). Live-проверено: матчи Group Stage
+  распознаны. Важно: Playoffs-подстраница на LP ещё не создана — UI честно
+  пишет «матчей не вернулось, добавьте вручную», появится брекет — обновление
+  подхватит. Фаза 2 (OpenDota /api/live → идущие игры по series_id) — не
+  начата, опциональна.
 - Остатки из старых секций ниже (запись 09-23) читать с учётом этого: публиковать
   больше нечего, все коммиты в `origin/main`.
 - CURRENT EPIC: `EPIC 12 — Prediction API`

@@ -26,14 +26,20 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from d2intel.db import get_db
+from d2intel.ingestion.liquipedia_schedule import refresh_schedule
 
 router = APIRouter(prefix="/api/schedule", tags=["schedule"])
+
+REPO_ROOT = Path(__file__).resolve().parents[3]  # (уже определён ниже — оставить один)
+DEFAULT_LIQUIPEDIA_PAGE = "PGL/Wallachia/9"
+CACHE_DIR = Path("artifacts/cache")
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 FREEZE_SCRIPT = REPO_ROOT / "scripts" / "prospective_freeze.py"
@@ -203,6 +209,34 @@ def _parse_freeze_id(stdout: str) -> str | None:
         if line.startswith("frozen "):
             return line.split(maxsplit=1)[1].strip()
     return None
+
+
+@router.get("/external")
+def external_schedule(
+    page: str = Query(default=DEFAULT_LIQUIPEDIA_PAGE, max_length=120),
+    refresh: bool = Query(default=False),
+    db: Session = Depends(get_db),  # noqa: B008
+) -> dict[str, Any]:
+    """Расписание с Liquipedia (ADR-008, display-only, кэш TTL + attribution)."""
+    del db  # внешний источник, БД не используется
+    slug = page.replace("/", "_")
+    cache_path = CACHE_DIR / f"liquipedia_schedule_{slug}.json"
+    try:
+        data = refresh_schedule(
+            page,
+            cache_path,
+            force=refresh,
+            client=httpx.Client(),
+        )
+    except (httpx.HTTPError, ValueError, OSError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                f"Liquipedia недоступен ({exc}). Ручное расписание продолжает "
+                "работать — добавьте фикстуру вручную."
+            ),
+        ) from exc
+    return data
 
 
 @router.post("/{fixture_id}/draft")

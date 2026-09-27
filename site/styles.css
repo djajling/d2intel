@@ -330,3 +330,6 @@ h1, h2, h3, p { overflow-wrap: anywhere; }
 .schedule-status { display: grid; gap: 3px; font-size: 11px; text-align: right; }
 .schedule-actions { display: flex; gap: 7px; flex-wrap: wrap; justify-content: flex-end; }
 @media (max-width: 860px) { .schedule-form { grid-template-columns: repeat(2, minmax(0, 1fr)); } .schedule-row { grid-template-columns: 1fr; } .schedule-status, .schedule-actions { text-align: left; justify-content: flex-start; } }
+
+.schedule-external { margin-top: 22px; border-top: 1px solid var(--line); padding-top: 16px; }
+.schedule-external .section-description { max-width: 720px; }
