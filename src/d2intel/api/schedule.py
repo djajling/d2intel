@@ -56,6 +56,35 @@ _SCHEDULE_SQL = """
     FROM scheduled_match
 """
 
+def notify_telegram(text: str) -> bool:
+    """Push в Telegram владельца (ключ/чат в .env, в git не попадают)."""
+    import os
+
+    token = os.getenv("TELEGRAM_BOT_TOKEN")
+    chat_id = os.getenv("TELEGRAM_CHAT_ID")
+    if not token or not chat_id:
+        env_path = REPO_ROOT / ".env"
+        if env_path.exists():
+            for line in env_path.read_text(encoding="utf-8").splitlines():
+                if line.startswith("TELEGRAM_BOT_TOKEN="):
+                    token = line.split("=", 1)[1].strip()
+                elif line.startswith("TELEGRAM_CHAT_ID="):
+                    chat_id = line.split("=", 1)[1].strip()
+    if not token or not chat_id:
+        return False
+    try:
+        import httpx as _httpx
+
+        response = _httpx.post(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            json={"chat_id": int(chat_id), "text": text},
+            timeout=15,
+        )
+        return response.status_code == 200
+    except Exception:  # noqa: BLE001 — push не должен ломать основной поток
+        return False
+
+
 _DRAFT_NOTE = (
     "Драфт сохранён как наблюдение для будущего Gate-2 (ADR-006): текущая "
     "модель драфт-информированной не является, прогноз от этого не меняется."
@@ -293,7 +322,7 @@ def auto_freeze(db: Session = Depends(get_db)) -> dict[str, Any]:  # noqa: B008
         for row in db.execute(
             text(
                 "SELECT team_a_label, team_b_label FROM scheduled_match "
-                "WHERE status = 'upcoming'"
+                "WHERE status IN ('upcoming', 'frozen', 'played')"
             )
         ).all()
     }
@@ -371,6 +400,15 @@ def auto_freeze(db: Session = Depends(get_db)) -> dict[str, Any]:  # noqa: B008
             except HTTPException as exc:
                 skipped.append({"teams": label, "reason": str(exc.detail)[:200]})
     db.commit()
+    if imported or frozen:
+        lines = []
+        if imported:
+            lines.append("Импортировано: " + "; ".join(i["teams"] for i in imported))
+        for f_item in frozen:
+            lines.append(
+                f"Заморожено: {f_item['teams']} (freeze {str(f_item['freeze_id'])[:8]}, старт {f_item['start']})"
+            )
+        notify_telegram("d2intel:\n" + "\n".join(lines))
     return {
         "checked_at": now.isoformat(),
         "imported": imported,
