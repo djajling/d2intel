@@ -43,7 +43,14 @@ from d2intel.ingestion.live_draft import live_match_view, load_hero_names
 router = APIRouter(prefix="/api/schedule", tags=["schedule"])
 
 REPO_ROOT = Path(__file__).resolve().parents[3]  # (уже определён ниже — оставить один)
-DEFAULT_LIQUIPEDIA_PAGE = "PGL/Wallachia/9"
+DEFAULT_LIQUIPEDIA_PAGE = "BLAST/SLAM/8"
+#: Какой турнир автоцикл считает «своим» (решение владельца 2026-09-27:
+#: Wallachia S9 закрыт 27.09, следующий целевой турнир — BLAST Slam VIII,
+#: матчи 29–30.09).
+#: Сравнение по подстроке без регистра: портал отдаёт названия вида
+#: «BLAST SLAM VIII - Group B». Имя страницы проверено через Liquipedia API
+#: (BLAST/SLAM/8 — есть, 8 матчей; BLAST/Slam/VIII — не существует).
+TOURNAMENT_FILTER = "blast slam viii"
 CACHE_DIR = Path("artifacts/cache")
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -298,8 +305,8 @@ def auto_freeze(db: Session = Depends(get_db)) -> dict[str, Any]:  # noqa: B008
     """Авто-заморозка (разрешение владельца 2026-09-27): портал → импорт → freeze.
 
     Идемпотентно и безопасно для повторных вызовов:
-    1. Новые предстоящие матчи Wallachia с портала импортируются (без дублей
-       по паре команд среди upcoming).
+    1. Новые предстоящие матчи целевого турнира (`TOURNAMENT_FILTER`) с
+       портала импортируются (без дублей по паре команд среди upcoming).
     2. Фикстуры, до старта которых осталось <= 10 минут, замораживаются
        (через тот же честный CLI; после старта — не замораживаются никогда).
     3. Фикстуры, чей старт прошёл без заморозки, помечаются `missed_start`
@@ -312,7 +319,7 @@ def auto_freeze(db: Session = Depends(get_db)) -> dict[str, Any]:  # noqa: B008
     frozen: list[dict[str, Any]] = []
     skipped: list[dict[str, Any]] = []
 
-    # 1. Портал: новые upcoming-матчи Wallachia → импорт без дублей.
+    # 1. Портал: новые upcoming-матчи целевого турнира → импорт без дублей.
     cache_path = CACHE_DIR / "liquipedia_matches_portal.json"
     try:
         portal = refresh_matches_portal(cache_path, client=httpx.Client())
@@ -330,7 +337,7 @@ def auto_freeze(db: Session = Depends(get_db)) -> dict[str, Any]:  # noqa: B008
     for match in portal.get("matches", []):
         if match.get("finished"):
             continue
-        if "Wallachia" not in (match.get("tournament") or ""):
+        if TOURNAMENT_FILTER not in (match.get("tournament") or "").lower():
             continue
         pair = (match["teams"][0].strip().lower(), match["teams"][1].strip().lower())
         if pair in existing_labels:
