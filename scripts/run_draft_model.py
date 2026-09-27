@@ -35,12 +35,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import text
-from sqlalchemy.orm import Session
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, log_loss
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
+from sqlalchemy import text
+from sqlalchemy.orm import Session
 
 from d2intel.db import SessionLocal
 

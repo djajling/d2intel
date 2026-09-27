@@ -35,7 +35,6 @@ from typing import Any
 
 import httpx
 from sqlalchemy import text
-from sqlalchemy.orm import Session
 
 from d2intel.db import SessionLocal
 from d2intel.ingestion.live_draft import USER_AGENT

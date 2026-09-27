@@ -13,7 +13,6 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 import pytest
-
 from scripts.run_draft_model import (
     grouped_bootstrap_ci,
     hero_winrate,
