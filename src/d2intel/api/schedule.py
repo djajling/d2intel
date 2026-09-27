@@ -22,6 +22,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -429,42 +430,152 @@ def _stratz_key() -> str | None:
     return None
 
 
-def _stratz_live_match(
-    *, team_a: str, team_b: str, client: httpx.Client
-) -> dict[str, Any] | None:
-    """Живой матч STRATZ (пики+банs если есть). Лимит free-tier жёсткий."""
+class _StratzThrottled(ValueError):
+    """Ожидаемая пауза по квоте free-tier. Показывать владельцу не нужно.
+
+    Это не отказ источника: живой вид и так даёт OpenDota, а STRATZ по квоте
+    доступен лишь эпизодически. Писать «STRATZ недоступен» при каждом опросе
+    UI (каждые 10–15 с) значило бы врать о поломке.
+    """
+
+
+STRATZ_ENDPOINT = "https://api.stratz.com/graphql"
+# Free-tier: «You cannot use more than 2 IP Addresses every 15 minutes» —
+# фактически не более 2 запросов за окно 15 минут (403 + текст про
+# освобождение слота). UI опрашивает live-draft каждые 10–15 с, поэтому без
+# собственного троттлинга квота сгорает за минуту, а403 потом висит 15 минут.
+# 8 минут между запросами → меньше 2 за окно с запасом.
+STRATZ_MIN_INTERVAL_SECONDS = 8 * 60
+STRATZ_COOLDOWN_SECONDS = 15 * 60
+
+# Только поля, подтверждённые интроспекцией MatchLiveType/MatchLivePlayerType
+# 2026-09-27 (scripts/stratz_introspect.py). Старый запрос падал с 400:
+# `slot` и `team` в схеме НЕТ — реальные имена `playerSlot` и `isRadiant`.
+# У LeagueType/TeamType состав полей не проверен, поэтому вложенных выборок
+# избегаем: лишний неподтверждённый алиас =400 = потерянный слот квоты.
+#
+# ВАЖНО по вопросу владельца: на MatchLiveType прямых полей пики/баны нет
+# (полный список полей получен интроспекцией). Состав вложенного
+# `playbackData` НЕ проверен — до его интроспекции утверждать «банов нет
+# вовсе» нельзя, поэтому честная формулировка ниже — про live-поля.
+STRATZ_LIVE_QUERY = (
+    "{ live { matches { matchId gameState gameTime leagueId "
+    "radiantScore direScore "
+    "players { heroId playerSlot isRadiant steamAccountId name } } } }"
+)
+
+# Состояние квоты живёт в процессе (проект без Redis/Celery — ADR).
+_STRATZ_STATE: dict[str, Any] = {
+    "last_attempt_at": 0.0,
+    "cooldown_until": 0.0,
+}
+
+
+def _stratz_reset_state() -> None:
+    """Сброс состояния квоты (тесты)."""
+    _STRATZ_STATE["last_attempt_at"] = 0.0
+    _STRATZ_STATE["cooldown_until"] = 0.0
+
+
+def _stratz_live_matches(*, client: httpx.Client) -> list[dict[str, Any]]:
+    """Один запрос live-матчей STRATZ с троттлингом и честными ошибками.
+
+    Квота учитывается до запроса: после 403 ставится пауза, между запросами —
+    минимальный интервал. Тело не-200 ответа сохраняется в тексте ошибки:
+    именно там живёт GraphQL `errors`, и раньше оно терялось в
+    `raise_for_status()` — из-за этого причина400 была не видна.
+    """
     key = _stratz_key()
     if key is None:
-        return None
-    query = {
-        "query": (
-            "{ live { matches { matchId gameState gameTime "
-            "league { id displayName } radiantTeam { name } direTeam { name } "
-            "players { heroId slot team } } } }"
+        raise _StratzThrottled("STRATZ_API_KEY не задан")
+
+    now = time.monotonic()
+    cooldown_until = float(_STRATZ_STATE["cooldown_until"])
+    if now < cooldown_until:
+        raise _StratzThrottled(f"STRATZ: пауза по квоте ещё {int(cooldown_until - now)} с")
+    last = float(_STRATZ_STATE["last_attempt_at"])
+    if last and now - last < STRATZ_MIN_INTERVAL_SECONDS:
+        raise _StratzThrottled(
+            f"STRATZ: интервал {STRATZ_MIN_INTERVAL_SECONDS} с между запросами ещё не прошёл"
         )
-    }
-    response = client.post(
-        "https://api.stratz.com/graphql",
-        json=query,
-        headers={
-            "Authorization": f"Bearer {key}",
-            "User-Agent": "STRATZ_API",
-            "Content-Type": "application/json",
-        },
-        timeout=30,
-    )
+    _STRATZ_STATE["last_attempt_at"] = now
+
+    try:
+        response = client.post(
+            STRATZ_ENDPOINT,
+            json={"query": STRATZ_LIVE_QUERY},
+            headers={
+                "Authorization": f"Bearer {key}",
+                "User-Agent": "STRATZ_API",
+                "Content-Type": "application/json",
+            },
+            timeout=30,
+        )
+    except httpx.HTTPError as exc:
+        raise ValueError(f"STRATZ: сеть {type(exc).__name__}: {exc}") from exc
+
     if response.status_code == 403:
-        raise ValueError(f"STRATZ rate limit: {response.text[:120]}")
-    response.raise_for_status()
-    a, b = team_a.strip().lower(), team_b.strip().lower()
-    for match in response.json()["data"]["live"]["matches"]:
-        ra = ((match.get("radiantTeam") or {}).get("name") or "").lower()
-        di = ((match.get("direTeam") or {}).get("name") or "").lower()
-        if (a in ra or ra in a) and (b in di or di in b):
-            return match
-        if (a in di or di in a) and (b in ra or ra in b):
-            return match
-    return None
+        _STRATZ_STATE["cooldown_until"] = now + STRATZ_COOLDOWN_SECONDS
+        raise ValueError(f"STRATZ rate-limit: {response.text[:200]}")
+    if response.status_code != 200:
+        raise ValueError(f"STRATZ HTTP {response.status_code}: {response.text[:300]}")
+    try:
+        payload = response.json()
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"STRATZ: не-JSON ответ: {response.text[:200]}") from exc
+
+    errors = payload.get("errors") or []
+    if errors:
+        raise ValueError(
+            "STRATZ GraphQL errors: " + json.dumps(errors, ensure_ascii=False)[:300]
+        )
+    matches = ((payload.get("data") or {}).get("live") or {}).get("matches")
+    if matches is None:
+        raise ValueError("STRATZ: data.live отсутствует в ответе")
+    return matches
+
+
+def _stratz_pick_live_match(
+    *,
+    accounts_a: set[int],
+    accounts_b: set[int],
+    label_a: str,
+    label_b: str,
+    client: httpx.Client,
+) -> tuple[dict[str, Any], str, str] | None:
+    """Наша живая игра в STRATZ: опознание строго по steamAccountId игроков.
+
+    Возвращает (матч, имя radiant-стороны, имя dire-стороны) или None.
+    Правило порога то же, что в OpenDota-пути: >=4 совпадений суммарно И обе
+    стороны представлены. Совпадение по названиям команд не используется —
+    оно слабее и ломается на смене сторон между картами; фоллбека по лиге нет.
+    """
+    matches = _stratz_live_matches(client=client)
+    best: tuple[int, dict[str, Any]] | None = None
+    for match in matches:
+        ids = {p.get("steamAccountId") for p in match.get("players") or []}
+        overlap = len((ids & accounts_a) | (ids & accounts_b))
+        both_sides = bool(ids & accounts_a) and bool(ids & accounts_b)
+        if overlap >= 4 and both_sides and (best is None or overlap > best[0]):
+            best = (overlap, match)
+    if best is None:
+        return None
+    match = best[1]
+    radiant_ids = {
+        p.get("steamAccountId")
+        for p in match.get("players") or []
+        if p.get("isRadiant")
+    }
+    hit_a = len(radiant_ids & accounts_a)
+    hit_b = len(radiant_ids & accounts_b)
+    if hit_a or hit_b:
+        radiant_label, dire_label = (
+            (label_a, label_b) if hit_a >= hit_b else (label_b, label_a)
+        )
+    else:
+        # Сторону опознать не удалось — не присваиваем имена наугад.
+        radiant_label, dire_label = "Radiant", "Dire"
+    return match, radiant_label, dire_label
 
 
 def _team_accounts(db: Session, label: str) -> set[int]:
@@ -502,43 +613,63 @@ def live_draft_snapshot(db: Session = Depends(get_db)) -> dict[str, Any]:  # noq
     accounts_a = _team_accounts(db, row.team_a_label)
     accounts_b = _team_accounts(db, row.team_b_label)
 
-    # Приоритет 1: STRATZ (пики+баны; лимит free-tier жёсткий — не чаще раза в минуту).
+    # Приоритет 1: STRATZ (live-пики; квота free-tier ~2 запроса за 15 минут,
+    # поэтому троттлинг тут норма, а не поломка источника).
     try:
-        stratz_match = _stratz_live_match(
-            team_a=row.team_a_label, team_b=row.team_b_label, client=httpx.Client()
+        stratz_pick = _stratz_pick_live_match(
+            accounts_a=accounts_a,
+            accounts_b=accounts_b,
+            label_a=row.team_a_label,
+            label_b=row.team_b_label,
+            client=httpx.Client(),
         )
+    except _StratzThrottled:
+        # Ожидаемая пауза: не трактуем как отказ и не пугаем владельца
+        # ложной ошибкой при каждом опросе UI (каждые 10–15 с).
+        stratz_pick, stratz_note = None, ""
     except (httpx.HTTPError, ValueError) as exc:
-        stratz_match, stratz_note = None, f"STRATZ недоступен: {str(exc)[:120]}. "
+        # Реальная ошибка — тело ответа сохраняем: раньше оно терялось
+        # в raise_for_status() и причина400 была не видна.
+        stratz_pick, stratz_note = None, f"STRATZ недоступен: {str(exc)[:200]}. "
     else:
         stratz_note = ""
-    if stratz_match is not None:
+
+    if stratz_pick is not None:
+        stratz_match, radiant_label, dire_label = stratz_pick
         hero_names = load_hero_names()
         radiant_players: list[dict[str, Any]] = []
         dire_players: list[dict[str, Any]] = []
         for player in stratz_match.get("players", []):
             hero_id = player.get("heroId")
             entry = {
-                "name": "—",
+                "name": player.get("name") or "—",
                 "hero": hero_names.get(int(hero_id)) if hero_id else None,
                 "team_tag": None,
             }
-            (radiant_players if player.get("team") == 0 else dire_players).append(entry)
+            (radiant_players if player.get("isRadiant") else dire_players).append(entry)
         return {
             "found": True,
             "source": "stratz",
-            "series_id": stratz_match.get("matchId"),
+            # matchId STRATZ — чужое ID-пространство: под series_id не
+            # подставляем, иначе подписан укажет на наш series_key из OpenDota.
+            # Официальных series_id в live-схеме STRATZ нет (интроспекция).
+            "stratz_match_id": stratz_match.get("matchId"),
+            "series_id": None,
             "game_time_seconds": stratz_match.get("gameTime"),
             "radiant": {
-                "name": (stratz_match.get("radiantTeam") or {}).get("name") or "Radiant",
+                "name": radiant_label,
                 "kills": stratz_match.get("radiantScore"),
                 "players": radiant_players,
             },
             "dire": {
-                "name": (stratz_match.get("direTeam") or {}).get("name") or "Dire",
+                "name": dire_label,
                 "kills": stratz_match.get("direScore"),
                 "players": dire_players,
             },
-            "note": "Данные STRATZ (пики; баны — если присутствуют в live-схеме)",
+            "note": (
+                "Данные STRATZ (live-пики). Банов в live-полях схемы нет — "
+                "полный драфт с банами собирается из доигранной карты."
+            ),
         }
 
     # Приоритет 2: OpenDota /api/live (только пики), опознание по account_id.
