@@ -18,6 +18,41 @@ Dota Esports Intelligence Platform — solo-founder проект: автомат
 
 ## Текущее состояние
 
+### Старт с нуля для нового агента (проверено 2026-09-27, 23:30 MSK)
+
+Прочитай это до остальных разделов: ниже есть устаревшие блоки про запуск
+(от 2026-09-22), они описывают более раннее состояние и сейчас вводят в
+заблуждение.
+
+1. **Рабочий клон — `C:\Users\SystemX\ZCodeProject\d2intel`.** Вторая копия
+   `Documents\1233333\d2intel` отстаёт на десятки коммитов и не содержит
+   `src/d2intel/api/schedule.py`. Работать только в первой.
+2. **Окружение:** `.venv\Scripts\python.exe` этого клона. Системный Python не
+   имеет fastapi — скрипты и тесты гнать только через `.venv`.
+3. **БД:** PostgreSQL на `localhost:5432`, база `d2intel`. URL брать из
+   `d2intel.config.get_settings().database_url`: переменной `DATABASE_URL` в
+   git-bash может не быть, `os.environ` читать напрямую нельзя. Миграции —
+   `python -m alembic upgrade head`, актуальная ревизия **`0006`**.
+4. **Сервер:** `uvicorn d2intel.app:app --host 127.0.0.1 --port 8000
+   --app-dir <clone>\src`, cwd `<clone>\src`. Запущен без `--reload`, поэтому
+   после правок кода процесс надо перезапускать, иначе страница отдаёт
+   старый код. Фоновый запуск из git-bash умирает вместе с шеллом — поднимать
+   через PowerShell `Start-Process` с абсолютными путями. Это процесс, а не
+   служба: после перезагрузки машины он не живёт.
+5. **Ключи** (Telegram, STRATZ) — в `.env` в корне клона, в git не идут.
+6. **Планировщик** `d2intel-live-cycle` (Планировщик Windows, каждые 5 мин):
+   auto-freeze + сбор драфтов, скрипт `artifacts/cache/scheduled_run.bat`.
+   Проверять так: `schtasks /query /fo TABLE | Select-String d2intel`.
+7. **Целевой турнир сейчас — BLAST Slam VIII** (`TOURNAMENT_FILTER` и
+   `DEFAULT_LIQUIPEDIA_PAGE = "BLAST/SLAM/8"` в `src/d2intel/api/schedule.py`).
+   PGL Wallachia S9 закрыт 27.09.
+8. **Состояние данных:** когорта Gate-2 — 284 игры / 6816 ходов драфта; ML-003
+   v2 прогон и отчёт — `docs/ml/ML003_run_v2_2026-09-27.json`; вердикт по
+   заморозке `8987f801` получен (y=1, log_loss 0.5815, brier 0.1944), две
+   заморозки честно pending. Вердикты свежих серий возможны только после
+   `scripts/close_finished_series.py` — иначе bo5 3:0/3:1 не закрывается
+   (см. ADR-010).
+
 Спецификация утверждена и ядро реализовано (всё 2026-09-21): product spec v0 (`docs/PRD.md`), временная семантика (`docs/PRD_TEMPORAL.md`, `ADR-001`/`ADR-005` — Accepted), аудит источников (`SRC-001` — случай B: история OpenDota PASS, upcoming no-go, работаем в ретроспективном контуре), скелет репозитория + CI (`INF-001`), temporal-схема БД, миграция `0001` (`DB-001`), OpenDota-клиент + raw capture, миграция `0002` (`ING-001`), нормализация исторического ядра, миграция `0003` (`DATA-001`). Код — в `src/d2intel/`, тесты — в `tests/`. Локальный запуск ядра выполнен 2026-09-22; факты и ограничения ниже.
 
 ### Выполнено: FEAT-001 — prior-form датасет as-of для map1 (2026-09-22)
