@@ -368,6 +368,15 @@ prospective-пути используется только из скриптов
   недоступна» на живой БД — psycopg не может вывести тип `$1` в `($1 IS NULL OR ...)`;
   их тесты на in-memory double это не ловили. Фикс: `CAST(:search AS text)` (2 места).
   Live-проверено: матчи 3 599 с патчем 7.41, кнопки «Новый расчёт» активны.
+- **SRC-003 + ADR-008 (Proposed, 2026-09-27): проба источников расписания.** Владелец
+  на реальных данных показал связку Liquipedia (серии Bo3) + OpenDota /api/live (игры
+  с league_id/series_id); наши series_key — то же пространство ID. Проба интеграции:
+  OpenDota live PASS (100 игр, поля на месте); Liquipedia cargoquery нет (SRC-002
+  подтверждён), action=parse wikitext PASS (механизм), титул Wallachia S9 не угадан
+  за 5 вариантов — блокер парсера, нужен URL страницы от владельца. Правила
+  (display-only, attribution CC-BY-SA, кэш 6–12ч, интервал ≥2c, склейка по ID,
+  fallback ручной) — `docs/research/SRC_003_LIVE_SCHEDULE_PROBE.md` +
+  `docs/adr/ADR-008-schedule-liquipedia-live.md` (Proposed).
 - Остатки из старых секций ниже (запись 09-23) читать с учётом этого: публиковать
   больше нечего, все коммиты в `origin/main`.
 - CURRENT EPIC: `EPIC 12 — Prediction API`
