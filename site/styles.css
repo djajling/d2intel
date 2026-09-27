@@ -339,3 +339,5 @@ h1, h2, h3, p { overflow-wrap: anywhere; }
 .live-score { font-size: 30px; font-weight: 800; color: var(--accent, #d97706); }
 .live-team { margin: 10px 0; }
 .live-player { display: flex; justify-content: space-between; gap: 12px; border-top: 1px solid rgba(255,255,255,.08); padding: 5px 0; margin: 0; font-size: 13px; }
+.live-bans { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; border-top: 1px dashed var(--line-strong); padding: 5px 0 0; margin: 4px 0 0; font-size: 12px; }
+.live-ban { padding: 1px 7px; border: 1px solid rgba(240, 142, 132, .35); border-radius: 999px; color: var(--danger); text-decoration: line-through; }

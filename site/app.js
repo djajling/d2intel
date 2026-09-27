@@ -1146,6 +1146,27 @@ async function loadPortalSchedule(force = false) {
   }
 }
 
+// Баны рисуем только если источник их реально отдал. Три разных состояния
+// не смешиваем: ключа нет вообще (источник не умеет), список пуст (источник
+// умеет, но ещё не отдал), список непуст. «Нет данных» нулём не подменяем.
+function renderLiveBans(data, sideKey) {
+  const line = el('p', 'live-bans');
+  const bans = data.bans ? data.bans[sideKey] : null;
+  if (!bans) {
+    line.append(el('span', 'table-secondary', 'Баны: источник их не отдаёт'));
+    return line;
+  }
+  if (!bans.length) {
+    line.append(el('span', 'table-secondary', 'Баны: данных пока нет'));
+    return line;
+  }
+  line.append(el('span', 'table-secondary', 'Баны: '));
+  for (const ban of bans) {
+    line.append(el('span', 'live-ban', ban.hero || 'герой не опознан'));
+  }
+  return line;
+}
+
 function renderLiveDraftInto(container, data) {
   container.replaceChildren();
   if (!data.found) {
@@ -1161,7 +1182,7 @@ function renderLiveDraftInto(container, data) {
   head.append(left, score, right);
   const clock = el('p', 'schedule-empty', `Игра идёт ${Math.floor((data.game_time_seconds || 0) / 60)} мин · серия ${data.series_id || '—'} · пиков ${(data.radiant.players.length + data.dire.players.length)}/10`);
   container.append(head, clock);
-  for (const side of [data.radiant, data.dire]) {
+  for (const [sideKey, side] of [['radiant', data.radiant], ['dire', data.dire]]) {
     const sideBlock = el('div', 'live-team');
     sideBlock.append(el('p', 'schedule-meta', side.name));
     for (const player of side.players) {
@@ -1170,6 +1191,7 @@ function renderLiveDraftInto(container, data) {
       rowLine.append(el('span', 'table-secondary', player.name));
       sideBlock.append(rowLine);
     }
+    sideBlock.append(renderLiveBans(data, sideKey));
     container.append(sideBlock);
   }
   if (data.note) container.append(el('p', 'schedule-empty', data.note));

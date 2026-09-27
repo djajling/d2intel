@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import re
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -56,8 +57,11 @@ class _FakeClient:
 
 
 @pytest.fixture(autouse=True)
-def _stratz_env(monkeypatch: pytest.MonkeyPatch) -> None:
+def _stratz_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setenv("STRATZ_API_KEY", "test-key")
+    # Своё состояние квоты на тест: реальный файл artifacts/cache прогон не
+    # обнуляет, иначе после каждого pytest сторож квоты слепнет.
+    monkeypatch.setattr(schedule, "STRATZ_STATE_PATH", tmp_path / "stratz_quota.json")
     schedule._stratz_reset_state()
     yield
     schedule._stratz_reset_state()
@@ -142,6 +146,41 @@ def test_rate_limit_arms_cooldown() -> None:
     assert schedule._STRATZ_STATE["cooldown_until"] > 0
     with pytest.raises(schedule._StratzThrottled):
         schedule._stratz_live_matches(client=client)
+    assert len(client.calls) == 1
+
+
+def test_quota_state_survives_process_restart(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Квота — внешний ресурс: после рестарта процесса сторож не слепнет.
+
+    Сервер перезапускают часто (перезалив кода). Пока состояние жило только в
+    памяти, новый процесс считал, что не делал запросов, и тратил слот.
+    """
+    state_path = tmp_path / "quota.json"
+    monkeypatch.setattr(schedule, "STRATZ_STATE_PATH", state_path)
+    schedule._stratz_reset_state()
+    client = _FakeClient([_FakeResponse(200, {"data": {"live": {"matches": []}}})])
+    assert schedule._stratz_live_matches(client=client) == []
+    assert state_path.exists(), "состояние квоты должно быть записано на диск"
+
+    # «Рестарт»: память процесса пустая, файл остался.
+    schedule._STRATZ_STATE["last_attempt_at"] = 0.0
+    schedule._STRATZ_STATE["cooldown_until"] = 0.0
+    schedule._stratz_load_state()
+    with pytest.raises(schedule._StratzThrottled):
+        schedule._stratz_live_matches(client=_FakeClient([]))
+
+
+def test_corrupt_quota_file_does_not_block_calls(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Битый файл состояния — не причина молча отключать источник."""
+    state_path = tmp_path / "quota.json"
+    state_path.write_text("{не json", encoding="utf-8")
+    monkeypatch.setattr(schedule, "STRATZ_STATE_PATH", state_path)
+    schedule._stratz_reset_state()
+    schedule._stratz_load_state()
+    client = _FakeClient([_FakeResponse(200, {"data": {"live": {"matches": []}}})])
+    assert schedule._stratz_live_matches(client=client) == []
     assert len(client.calls) == 1
 
 

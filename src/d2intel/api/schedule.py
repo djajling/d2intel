@@ -466,17 +466,77 @@ STRATZ_LIVE_QUERY = (
     "playbackData { pickBans { isPick heroId bannedHeroId isRadiant order } } } } }"
 )
 
-# Состояние квоты живёт в процессе (проект без Redis/Celery — ADR).
+# Состояние квоты живёт в процессе (проект без Redis/Celery — ADR) и
+# дополнительно на диске: сервер перезапускают часто, а после рестарта память
+# пустая — сторож слепнеет и тратит слоты квоты, которых и так два на окно.
+# Файл переживает рестарт: квота — внешний ресурс, а не состояние процесса.
+# Время — wall clock (time.time), иначе отметки не переживают рестарт.
+STRATZ_STATE_PATH = REPO_ROOT / "artifacts" / "cache" / "stratz_quota.json"
+
 _STRATZ_STATE: dict[str, Any] = {
     "last_attempt_at": 0.0,
     "cooldown_until": 0.0,
 }
 
 
+def _stratz_load_state() -> None:
+    """Поднять состояние квоты с диска; битый/отсутствующий файл — не беда.
+
+    Отметку из будущего (скачок часов, перенос файла) отбрасываем: иначе
+    сторож залипнет на паузе, которой в реальности нет.
+    """
+    try:
+        raw = json.loads(STRATZ_STATE_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return
+    if not isinstance(raw, dict):
+        return
+    now = time.time()
+    for key in ("last_attempt_at", "cooldown_until"):
+        value = raw.get(key)
+        if not isinstance(value, (int, float)):
+            continue
+        value = float(value)
+        if value <= 0:
+            continue
+        if key == "last_attempt_at" and value > now:
+            continue
+        _STRATZ_STATE[key] = value
+
+
+def _stratz_save_state() -> None:
+    """Записать состояние квоты. Best-effort: отказ диска не ломает запрос —
+    хуже потерять ответ UI, чем запись (сторож просто станет мягче)."""
+    try:
+        STRATZ_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        tmp_path = STRATZ_STATE_PATH.with_suffix(".json.tmp")
+        tmp_path.write_text(
+            json.dumps(
+                {key: float(value) for key, value in _STRATZ_STATE.items()},
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        tmp_path.replace(STRATZ_STATE_PATH)
+    except OSError:
+        pass
+
+
 def _stratz_reset_state() -> None:
-    """Сброс состояния квоты (тесты)."""
+    """Сброс состояния квоты (тесты): память и файл по текущему пути.
+
+    Тесты подменяют STRATZ_STATE_PATH на tmp_path, поэтому реальный файл
+    квоты прогон не обнуляет — иначе после каждого pytest сторож слеп.
+    """
     _STRATZ_STATE["last_attempt_at"] = 0.0
     _STRATZ_STATE["cooldown_until"] = 0.0
+    try:
+        STRATZ_STATE_PATH.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
+_stratz_load_state()
 
 
 def _stratz_live_matches(*, client: httpx.Client) -> list[dict[str, Any]]:
@@ -491,7 +551,7 @@ def _stratz_live_matches(*, client: httpx.Client) -> list[dict[str, Any]]:
     if key is None:
         raise _StratzThrottled("STRATZ_API_KEY не задан")
 
-    now = time.monotonic()
+    now = time.time()
     cooldown_until = float(_STRATZ_STATE["cooldown_until"])
     if now < cooldown_until:
         raise _StratzThrottled(f"STRATZ: пауза по квоте ещё {int(cooldown_until - now)} с")
@@ -501,6 +561,7 @@ def _stratz_live_matches(*, client: httpx.Client) -> list[dict[str, Any]]:
             f"STRATZ: интервал {STRATZ_MIN_INTERVAL_SECONDS} с между запросами ещё не прошёл"
         )
     _STRATZ_STATE["last_attempt_at"] = now
+    _stratz_save_state()
 
     try:
         response = client.post(
@@ -518,6 +579,7 @@ def _stratz_live_matches(*, client: httpx.Client) -> list[dict[str, Any]]:
 
     if response.status_code == 403:
         _STRATZ_STATE["cooldown_until"] = now + STRATZ_COOLDOWN_SECONDS
+        _stratz_save_state()
         raise ValueError(f"STRATZ rate-limit: {response.text[:200]}")
     if response.status_code != 200:
         raise ValueError(f"STRATZ HTTP {response.status_code}: {response.text[:300]}")

@@ -1,0 +1,68 @@
+{
+  "task_id": "ML-003",
+  "model_version": "logreg_draft_v5",
+  "manifest": "docs\\ml\\ML003_draft_manifest_v2.json",
+  "manifest_fixed_at": "2026-09-27",
+  "ran_at": "2026-09-27T19:37:02.927590+03:00",
+  "library_versions": {
+    "sklearn": "1.6.1"
+  },
+  "cohort": {
+    "games": 284,
+    "train": 254,
+    "test": 30,
+    "series_in_test": 13,
+    "label_balance_cohort": 0.493
+  },
+  "split": {
+    "kind": "frozen test по времени",
+    "rule": "сортировка по event_time ASC; последние 30 игр — test, остальные — train",
+    "expected_train": 254,
+    "expected_test": 30,
+    "test_used_for": "итоговый гейт; сравнение baseline/draft-вариантов на том же test — сам эксперимент, а не отбор гиперпараметров",
+    "validation": "отсутствует намеренно: тест остаётся чистым, тюнинг по нему запрещён протоколом"
+  },
+  "majority_class_accuracy_test": 0.5,
+  "models": [
+    {
+      "model": "M0_baseline",
+      "columns": [
+        "d_team_wr_asof",
+        "d_side"
+      ],
+      "accuracy": 0.7,
+      "log_loss": 0.6655,
+      "bootstrap_ci95": [
+        0.5806,
+        0.8276
+      ]
+    },
+    {
+      "model": "M1_draft",
+      "columns": [
+        "d_team_wr_asof",
+        "d_side",
+        "d_comp_wr"
+      ],
+      "accuracy": 0.6,
+      "log_loss": 0.6369,
+      "bootstrap_ci95": [
+        0.4,
+        0.7857
+      ]
+    }
+  ],
+  "threshold": 0.7,
+  "verdict": "порог не достигнут: accuracy 0.600 [0.400, 0.786] при пороге 0.70",
+  "draft_delta": {
+    "accuracy": -0.1,
+    "log_loss": -0.0286,
+    "interpretation": "драфт не помог"
+  },
+  "honesty": [
+    "Ретроспективная метрика обучающей модели, а НЕ оценка живого прогноза.",
+    "Ретроспективный cutoff = event_time матча (ADR-007 п.6).",
+    "n test = 30: у границы «30», bootstrap-интервал — грубая неопределённость, не тест.",
+    "Гиперпараметры и сплит зафиксированы в манифесте до обучения; тюнинга не было."
+  ]
+}
