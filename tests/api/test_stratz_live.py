@@ -4,6 +4,8 @@
 
 * в запросе только алиасы, подтверждённые интроспекцией MatchLivePlayerType
   (`playerSlot`/`isRadiant`); старые `slot`/`team` =400;
+* пики и баны берутся из playbackData.pickBans (подтверждено интроспекцией
+  MatchLivePlaybackDataType/MatchLivePickBanType 2026-09-27);
 * тело ошибки не теряется (раньше его съедал raise_for_status);
 * троттлинг квоты: второй запрос в окне не уходит в сеть вообще;
 * опознание «нашей» игры идёт по steamAccountId игроков, а не по названиям
@@ -24,6 +26,7 @@ from fastapi.testclient import TestClient
 from d2intel.api import schedule
 from d2intel.app import create_app
 from d2intel.db import get_db
+from d2intel.ingestion.live_draft import load_hero_names
 
 
 class _FakeResponse:
@@ -288,4 +291,69 @@ def test_live_draft_endpoint_returns_stratz_view_without_series_id(
     assert len(players) == 10
     assert all(p["name"].startswith("player_") for p in players)
     assert all("hero" in p for p in players)
-    assert "Банов в live-полях" in body["note"]
+    assert "playbackData.pickBans" in body["note"]
+    # playbackData в фейке отсутствует — честные пустые списки, не нули.
+    assert body["bans"] == {"radiant": [], "dire": []}
+    assert body["picks_by_order"] == {"radiant": [], "dire": []}
+
+
+def test_live_draft_stratz_extracts_bans_and_picks_in_order(
+    api: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Баны и пики из playbackData.pickBans попадают в ответ; сортировка по
+    order; бан = isPick=false + bannedHeroId, пик = isPick=true + heroId."""
+    client = api
+    created = client.post(
+        "/api/schedule",
+        json={
+            "tournament_label": "PGL Wallachia S9",
+            "team_a_label": "Natus Vincere",
+            "team_b_label": "Aurora Gaming",
+            "scheduled_at": "2026-09-28T15:00:00+03:00",
+        },
+    )
+    assert created.status_code == 201, created.text
+    fixture_id = created.json()["id"]
+
+    class _Completed:
+        returncode = 0
+        stdout = "frozen 0f2e1111-2222-3333-4444-555555555555\n"
+        stderr = ""
+
+    monkeypatch.setattr(
+        "d2intel.api.schedule.subprocess.run", lambda *a, **k: _Completed()
+    )
+    assert client.post(f"/api/schedule/{fixture_id}/freeze").status_code == 200
+
+    match = _match(
+        _squad(range(1, 6), radiant=True) + _squad(range(6, 11), radiant=False),
+        playbackData={
+            "pickBans": [
+                {"isPick": False, "bannedHeroId": 30, "isRadiant": True, "order": 0},
+                {"isPick": False, "bannedHeroId": 45, "isRadiant": False, "order": 1},
+                {"isPick": True, "heroId": 8, "isRadiant": True, "order": 10},
+                {"isPick": True, "heroId": 5, "isRadiant": False, "order": 11},
+                {"isPick": True, "heroId": 35, "isRadiant": True, "order": 12},
+                {"isPick": True, "heroId": 41, "isRadiant": False, "order": 13},
+            ]
+        },
+    )
+
+    def _fake_pick(**kwargs: Any) -> tuple[dict[str, Any], str, str]:
+        return match, "Natus Vincere", "Aurora Gaming"
+
+    monkeypatch.setattr(schedule, "_stratz_pick_live_match", _fake_pick)
+
+    body = client.get("/api/schedule/live-draft").json()
+    assert body["source"] == "stratz"
+    # Порядок ходов сохранён (order), стороны не перепутаны.
+    assert body["picks_by_order"] == {
+        "radiant": [8, 35],
+        "dire": [5, 41],
+    }
+    assert [b["hero"] for b in body["bans"]["radiant"]] == [load_hero_names().get(30)]
+    assert [b["order"] for b in body["bans"]["radiant"]] == [0]
+    assert [b["hero"] for b in body["bans"]["dire"]] == [
+        load_hero_names().get(45)
+    ]
+    assert "playbackData.pickBans" in body["note"]

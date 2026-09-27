@@ -448,20 +448,22 @@ STRATZ_ENDPOINT = "https://api.stratz.com/graphql"
 STRATZ_MIN_INTERVAL_SECONDS = 8 * 60
 STRATZ_COOLDOWN_SECONDS = 15 * 60
 
-# Только поля, подтверждённые интроспекцией MatchLiveType/MatchLivePlayerType
-# 2026-09-27 (scripts/stratz_introspect.py). Старый запрос падал с 400:
+# Только поля, подтверждённые интроспекцией 2026-09-27
+# (scripts/stratz_introspect.py): MatchLiveType, MatchLivePlayerType,
+# MatchLivePlaybackDataType, MatchLivePickBanType. Старый запрос падал с 400:
 # `slot` и `team` в схеме НЕТ — реальные имена `playerSlot` и `isRadiant`.
 # У LeagueType/TeamType состав полей не проверен, поэтому вложенных выборок
-# избегаем: лишний неподтверждённый алиас =400 = потерянный слот квоты.
+# из них избегаем: лишний неподтверждённый алиас =400 = потерянный слот квоты.
 #
-# ВАЖНО по вопросу владельца: на MatchLiveType прямых полей пики/баны нет
-# (полный список полей получен интроспекцией). Состав вложенного
-# `playbackData` НЕ проверен — до его интроспекции утверждать «банов нет
-# вовсе» нельзя, поэтому честная формулировка ниже — про live-поля.
+# Пики и баны в live-схеме ЕСТЬ — но не на MatchLiveType, а во вложенном
+# playbackData.pickBans (isPick/heroId/bannedHeroId/isRadiant/order).
+# Ранний комментарий «банов в live-полях нет» опровергнут интроспекцией
+# playbackData: на верхнем уровне их правда нет, но вложенный блок есть.
 STRATZ_LIVE_QUERY = (
     "{ live { matches { matchId gameState gameTime leagueId "
     "radiantScore direScore "
-    "players { heroId playerSlot isRadiant steamAccountId name } } } }"
+    "players { heroId playerSlot isRadiant steamAccountId name } "
+    "playbackData { pickBans { isPick heroId bannedHeroId isRadiant order } } } } }"
 )
 
 # Состояние квоты живёт в процессе (проект без Redis/Celery — ADR).
@@ -647,6 +649,34 @@ def live_draft_snapshot(db: Session = Depends(get_db)) -> dict[str, Any]:  # noq
                 "team_tag": None,
             }
             (radiant_players if player.get("isRadiant") else dire_players).append(entry)
+
+        # Live-баны: playbackData.pickBans, бан = isPick=false + bannedHeroId,
+        # сторона = isRadiant, порядок хода = order. Поле может отсутствовать
+        # (карта ещё в стадии пиков/источник не отдал) — тогда честный пустой
+        # список, нулями не подменяем.
+        pick_bans = ((stratz_match.get("playbackData") or {}).get("pickBans")) or []
+        pick_bans = sorted(pick_bans, key=lambda m: m.get("order") or 0)
+        radiant_bans: list[dict[str, Any]] = []
+        dire_bans: list[dict[str, Any]] = []
+        radiant_picks: list[int] = []
+        dire_picks: list[int] = []
+        for move in pick_bans:
+            side_bans, side_picks = (
+                (radiant_bans, radiant_picks)
+                if move.get("isRadiant")
+                else (dire_bans, dire_picks)
+            )
+            if move.get("isPick"):
+                hero_id = move.get("heroId")
+                if hero_id:
+                    side_picks.append(int(hero_id))
+            else:
+                banned = move.get("bannedHeroId")
+                if banned:
+                    side_bans.append(
+                        {"hero": hero_names.get(int(banned)), "order": move.get("order")}
+                    )
+
         return {
             "found": True,
             "source": "stratz",
@@ -666,9 +696,11 @@ def live_draft_snapshot(db: Session = Depends(get_db)) -> dict[str, Any]:  # noq
                 "kills": stratz_match.get("direScore"),
                 "players": dire_players,
             },
+            "bans": {"radiant": radiant_bans, "dire": dire_bans},
+            "picks_by_order": {"radiant": radiant_picks, "dire": dire_picks},
             "note": (
-                "Данные STRATZ (live-пики). Банов в live-полях схемы нет — "
-                "полный драфт с банами собирается из доигранной карты."
+                "Данные STRATZ (live-пики и live-баны из playbackData.pickBans; "
+                "схема подтверждена интроспекцией 2026-09-27)."
             ),
         }
 
