@@ -43,6 +43,8 @@ EXPECTED_TABLES = {
     "prediction_snapshot",
     "snapshot_evidence",
     "prediction_evaluation",
+    # Gate-2: пары «драфт → исход»
+    "picks_bans",
 }
 
 # Пять временных полей из docs/PRD_TEMPORAL.md.
@@ -72,6 +74,7 @@ VERSIONED_TABLES = {
     "normalization_quarantine",
     "feature_snapshot",
     "prediction_snapshot",
+    "picks_bans",
 }
 
 

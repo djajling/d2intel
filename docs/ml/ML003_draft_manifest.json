@@ -1,0 +1,98 @@
+{
+  "manifest_version": "ml003-manifest.v1",
+  "task_id": "ML-003",
+  "model_version": "logreg_draft_v5",
+  "purpose": "Gate-2 (post-draft, ADR-006): проверить, добавляет ли драфт точности к prior-form сигналу. Пары «драфт → исход» — обучающие данные, а НЕ оценка прогноза: ретроспективу за живой прогноз не выдаём.",
+  "fixed_at": "2026-09-27",
+  "fixed_before_training": true,
+  "protocol": {
+    "adr": "docs/adr/ADR-007-model-acceptance-threshold.md",
+    "metric": "accuracy на frozen test",
+    "threshold": 0.70,
+    "threshold_note": "Порог заявлен владельцем до обучения. Это проверяемое условие, а не обещание; подбором данных, сплитов или порога классификации не достигается.",
+    "rule_if_not_met": "вердикт «порог не достигнут, значение X [интервал]» или insufficient evidence; модель не подгоняется",
+    "mandatory_baseline": "majority_class_accuracy на том же test — обязателен в отчёте",
+    "extra_metrics": ["log_loss", "grouped_bootstrap_ci_by_series"],
+    "n_lt_30": "при n < 30 заявлений о значимости нет; bootstrap — грубая неопределённость, а не тест",
+    "cutoff_limitation": "ретроспективный cutoff = event_time матча (времени объявления фикстуры у источника нет) — обязано указываться в отчёте",
+    "no_tuning": "гиперпараметры зафиксированы здесь; тест трогается один раз в конце"
+  },
+  "cohort": {
+    "definition": "все игры, у которых есть picks_bans в нашей БД, доказанный winner_team_id, event_time и две команды в game_team",
+    "source_of_drafts": "OpenDota /api/matches/{id}, собрано scripts/backfill_drafts.py в таблицу picks_bans (миграция 0005)",
+    "expected_games": 71,
+    "expected_picks_bans_rows": 1704,
+    "series": 32,
+    "patches": 1,
+    "event_time_range": ["2026-09-21T11:06:26+03:00", "2026-09-27T16:46:59+03:00"],
+    "assembled_at": "2026-09-27",
+    "reconciled_with_target": "когорта не пересекается с prospective-оценкой: заморозки идут в prediction_snapshot, сюда не попадают"
+  },
+  "label": {
+    "definition": "y = 1, если выиграла команда A",
+    "canonical_coordinates": "team_a_id < team_b_id (UUID), как в ML-002 — ориентация не зависит от стороны и от порядка слотов",
+    "note": "сторона (radiant/dire) входит в признаки, а не в метку"
+  },
+  "split": {
+    "kind": "frozen test по времени",
+    "rule": "сортировка по event_time ASC; последние 30 игр — test, остальные — train",
+    "expected_train": 41,
+    "expected_test": 30,
+    "test_used_for": "итоговый гейт; сравнение baseline/draft-вариантов на том же test — сам эксперимент, а не отбор гиперпараметров",
+    "validation": "отсутствует намеренно: при n=71 отдельный valid отнял бы у train и без того мало данных"
+  },
+  "features": {
+    "schema_version": "draft.v1",
+    "note": "все признаки — дифференциалы в координатах team A минус team B; строятся только из данных до event_time целевой игры",
+    "baseline_columns": ["d_team_wr_asof", "d_side"],
+    "draft_columns": ["d_team_wr_asof", "d_side", "d_comp_wr"],
+    "definitions": {
+      "d_team_wr_asof": {
+        "formula": "WR(A) − WR(B), WR = победы / игры команды с event_time < T",
+        "min_games": 3,
+        "fallback": "меньше min_games игр → WR = 0.5, дифференциал → 0 (нейтральное «нет информации», не ноль-победа)"
+      },
+      "d_side": {
+        "formula": "+1 если team A — radiant, −1 если dire",
+        "source": "game_team.side",
+        "known_before_draft": true
+      },
+      "d_comp_wr": {
+        "formula": "mean(hero_winrate(5 пиков A)) − mean(hero_winrate(5 пиков B))",
+        "hero_winrate": {
+          "scope": "по играм с event_time < T",
+          "patch_preference": "сначала игры того же patch_id; если наблюдений < 3 — все патчи до T",
+          "fallback": "герой без истории до T → 0.5"
+        },
+        "missing_policy": "пиков меньше 5 → среднее по имеющимся; отсутствующий драфт в когорту не попадает вообще"
+      }
+    },
+    "nan_policy": "LR без нативной работы с NaN: все фоллбэки зафиксированы выше и дают число, а не NaN"
+  },
+  "algorithm": {
+    "name": "logistic_regression",
+    "library": {"name": "sklearn", "version": "1.5.x (фактическая — в run-отчёте)"},
+    "params": {"C": 1.0, "penalty": "l2", "class_weight": null, "max_iter": 1000, "random_state": 17},
+    "scaling": "StandardScaler по train, тот же объект применяется к test",
+    "models_compared": {
+      "M0_baseline": "baseline_columns",
+      "M1_draft": "draft_columns"
+    }
+  },
+  "data_snapshot": {
+    "history_games_with_hero_id_before_cohort": 6341,
+    "history_participants_before_cohort": 63410,
+    "distinct_heroes_in_history": 127,
+    "distinct_heroes_in_cohort": 97,
+    "cohort_heroes_with_history": 97,
+    "note": "покрытие героев полное — фоллбэк 0.5 на практике не должен срабатывать; если сработает, это видно в run-отчёте"
+  },
+  "honest_expectations": [
+    "n=71 — это мало; test ровно 30, граница из ADR-007 «131 ≥ 30» выполняется впритык",
+    "когорта лежит на одном патче за 7 дней — as-of hero winrate имеет короткое окно",
+    "0.70 — сильный результат; заранее ожидать его нельзя",
+    "если драфт не поможет — это тоже валидный результат и будет заявлен прямо"
+  ],
+  "runner": "scripts/run_draft_model.py",
+  "output_prefix": "docs/ml/ML003_run_"
+}
