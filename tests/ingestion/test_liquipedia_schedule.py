@@ -72,3 +72,34 @@ def test_score_draw_has_no_winner() -> None:
     patched_matches = parse_matches_from_html(patched, source_page="t")
     assert patched_matches[0]["score"] == ["1", "1"]
     assert patched_matches[0]["winner"] is None
+
+
+# --------------------------------------------------------------------------- #
+# Портал Liquipedia:Matches — все турниры
+# ---------------------------------------------------------------------------
+
+PORTAL_FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "liquipedia_matches_portal_sample.html"
+
+
+def _parse_portal() -> list[dict]:
+    from d2intel.ingestion.liquipedia_schedule import parse_ticker_matches
+
+    return parse_ticker_matches(PORTAL_FIXTURE.read_text(encoding="utf-8"))
+
+
+def test_portal_parses_upcoming_matches_with_tournament() -> None:
+    matches = _parse_portal()
+    assert matches, "тикер не распознан"
+    first = matches[0]
+    assert first["teams"] == ["YBN Team", "Stray Team"]
+    assert first["tournament"] == "BB Streamers Battle 15 - Playoffs"
+    assert first["bestof"] == 3
+    assert first["finished"] is False  # у upcoming счёт пустой
+    assert first["started_at"] == "2026-09-27T12:00:00+00:00"
+
+
+def test_portal_upcoming_has_no_fake_scores() -> None:
+    """Пустые спаны счёта → score None, не «0:0» (masking vs zero)."""
+    for match in _parse_portal():
+        assert match["score"] is None
+        assert match["winner"] is None

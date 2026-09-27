@@ -33,7 +33,10 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from d2intel.db import get_db
-from d2intel.ingestion.liquipedia_schedule import refresh_schedule
+from d2intel.ingestion.liquipedia_schedule import (
+    refresh_matches_portal,
+    refresh_schedule,
+)
 
 router = APIRouter(prefix="/api/schedule", tags=["schedule"])
 
@@ -235,6 +238,26 @@ def external_schedule(
                 f"Liquipedia недоступен ({exc}). Ручное расписание продолжает "
                 "работать — добавьте фикстуру вручную."
             ),
+        ) from exc
+    return data
+
+
+@router.get("/external/matches")
+def external_matches_portal(
+    refresh: bool = Query(default=False),
+) -> dict[str, Any]:
+    """Матчи ВСЕХ турниров с портала Liquipedia:Matches (ADR-008)."""
+    cache_path = CACHE_DIR / "liquipedia_matches_portal.json"
+    try:
+        data = refresh_matches_portal(
+            cache_path,
+            force=refresh,
+            client=httpx.Client(),
+        )
+    except (httpx.HTTPError, ValueError, OSError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Liquipedia недоступен ({exc}). Ручное расписание работает.",
         ) from exc
     return data
 

@@ -111,6 +111,99 @@ def parse_matches_from_html(html: str, *, source_page: str) -> list[dict[str, An
     return matches
 
 
+
+# --------------------------------------------------------------------------- #
+# Портал «Liquipedia:Matches» — расписание всех турниров (match-info блоки)
+# ---------------------------------------------------------------------------
+
+_TICKER_ROW_MARKER = "<div class=\"match-info\">"
+_TICKER_TEAM_RE = re.compile(r'<a href="/dota2/[^"]*" title="([^"]+)"')
+_TICKER_TOURNAMENT_RE = re.compile(
+    r'match-info-tournament-name"><a href="[^"]*" title="[^"]*">\s*<span>([^<]+)</span>'
+)
+_REDLINK_SUFFIX = " (page does not exist)"
+
+
+def parse_ticker_matches(html: str) -> list[dict[str, Any]]:
+    """Матчи портала Liquipedia:Matches — все турниры, upcoming + completed.
+
+    У предстоящих матчей спаны счёта пустые → score None, finished False.
+    Имя турнира берётся из `match-info-tournament-name`.
+    """
+    matches: list[dict[str, Any]] = []
+    starts = [m.start() for m in re.finditer(re.escape(_TICKER_ROW_MARKER), html)]
+    for index, start in enumerate(starts):
+        end = starts[index + 1] if index + 1 < len(starts) else len(html)
+        block = html[start:end]
+        opponents: list[str] = []
+        for part in block.split("match-info-header-opponent")[1:]:
+            team_match = _TICKER_TEAM_RE.search(part)
+            if team_match:
+                name = team_match.group(1)
+                if name.endswith(_REDLINK_SUFFIX):
+                    name = name[: -len(_REDLINK_SUFFIX)]
+                opponents.append(name)
+        if len(opponents) < 2:
+            continue
+        timestamp = _TIMESTAMP_RE.search(block)
+        scores = _SCORE_RE.findall(block)
+        bestof = _BESTOF_RE.search(block)
+        tournament = _TICKER_TOURNAMENT_RE.search(block)
+        score_pair = scores[:2] if len(scores) >= 2 else None
+        winner = None
+        if score_pair and score_pair[0] != score_pair[1]:
+            winner = opponents[0] if int(score_pair[0]) > int(score_pair[1]) else opponents[1]
+        matches.append(
+            {
+                "teams": opponents[:2],
+                "started_at": (
+                    datetime.fromtimestamp(int(timestamp.group(1)), tz=UTC).isoformat()
+                    if timestamp
+                    else None
+                ),
+                "bestof": int(bestof.group(1)) if bestof else None,
+                "finished": score_pair is not None,
+                "score": score_pair,
+                "winner": winner,
+                "tournament": tournament.group(1) if tournament else None,
+                "source_page": "Liquipedia:Matches",
+            }
+        )
+    return matches
+
+
+def refresh_matches_portal(
+    cache_path: Path,
+    *,
+    ttl_hours: float = DEFAULT_TTL_HOURS,
+    force: bool = False,
+    client: httpx.Client | None = None,
+    page: str = "Liquipedia:Matches",
+) -> dict[str, Any]:
+    """Кэшированная выборка портала матчей всех турниров (ADR-008)."""
+    cache = load_cached(cache_path)
+    if not force and cache is not None and cache_is_fresh(cache, ttl_hours):
+        return {**cache, "attribution": ATTRIBUTION, "cache": "fresh"}
+
+    owned_client = client is None
+    client = client or httpx.Client()
+    try:
+        html = fetch_page_html(client, page)
+    finally:
+        if owned_client:
+            client.close()
+    payload = {
+        "page": page,
+        "fetched_at": datetime.now(UTC).isoformat(),
+        "matches": parse_ticker_matches(html),
+        "pages_fetched": [page],
+        "page_errors": [],
+    }
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    cache_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    return {**payload, "attribution": ATTRIBUTION, "cache": "refreshed"}
 def load_cached(cache_path: Path) -> dict[str, Any] | None:
     """Кэш: {fetched_at, page, matches}. Отсутствует — None."""
     if not cache_path.exists():

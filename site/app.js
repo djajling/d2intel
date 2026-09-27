@@ -613,7 +613,7 @@ async function refreshWorkspace({ toast = false } = {}) {
       $('#model-sidebar-status').textContent = describeError(error);
       setHealth(false, 'Локальный API недоступен');
     });
-  await Promise.all([overviewPromise, loadMatches(), loadPredictions(), loadSchedule(), checkHealth()]);
+  await Promise.all([overviewPromise, loadMatches(), loadPredictions(), loadSchedule(), loadPortalSchedule(), checkHealth()]);
   updateTimestamp();
   renderMatches();
   renderPredictions();
@@ -1093,6 +1093,59 @@ async function loadExternalSchedule(force = false) {
   }
 }
 
+function renderPortalSchedule(data) {
+  const container = $('#schedule-portal-list');
+  if (!container) return;
+  container.replaceChildren();
+  const meta = el('p', 'schedule-empty', `Источник: Liquipedia (CC BY-SA 3.0) · обновлено ${formatDateTime(data.fetched_at)} · кэш: ${data.cache} · матчей: ${data.matches.length}`);
+  container.append(meta);
+  for (const match of data.matches) {
+    const row = el('article', 'schedule-row');
+    const main = el('div', 'schedule-main');
+    const teams = el('p', 'schedule-teams');
+    teams.append(el('span', 'table-primary', `${match.teams[0]} vs ${match.teams[1]}`));
+    if (match.bestof) teams.append(el('span', 'table-secondary', `Bo${match.bestof}`));
+    main.append(teams);
+    const metaRow = el('p', 'schedule-meta');
+    metaRow.append(el('span', 'table-primary', match.tournament || 'Турнир не указан'));
+    if (match.started_at) metaRow.append(el('span', 'table-secondary', formatDateTime(match.started_at)));
+    main.append(metaRow);
+    row.append(main);
+    const statusCell = el('div', 'schedule-status');
+    if (match.finished) {
+      statusCell.append(el('span', 'table-primary', match.score ? `${match.score[0]} : ${match.score[1]}` : 'сыграно'));
+      if (match.winner) statusCell.append(el('span', 'table-secondary', `победа ${match.winner}`));
+    } else {
+      statusCell.append(el('span', 'table-secondary', 'предстоит'));
+    }
+    row.append(statusCell);
+    const actions = el('div', 'schedule-actions');
+    if (!match.finished) {
+      const importButton = el('button', 'button button--outline', 'Импортировать');
+      importButton.type = 'button';
+      importButton.dataset.importFixture = JSON.stringify({
+        tournament_label: match.tournament || 'Liquipedia',
+        team_a_label: match.teams[0],
+        team_b_label: match.teams[1],
+      });
+      actions.append(importButton);
+    }
+    row.append(actions);
+    container.append(row);
+  }
+}
+
+async function loadPortalSchedule(force = false) {
+  const container = $('#schedule-portal-list');
+  if (!container) return;
+  try {
+    const data = await requestJSON(`/schedule/external/matches${force ? '?refresh=true' : ''}`);
+    renderPortalSchedule(data);
+  } catch (error) {
+    container.replaceChildren(el('p', 'schedule-empty', describeError(error)));
+  }
+}
+
 function bindSchedule() {
   const form = $('#schedule-form');
   if (!form) return;
@@ -1102,6 +1155,28 @@ function bindSchedule() {
     refreshExternal.addEventListener('click', () => {
       refreshExternal.disabled = true;
       loadExternalSchedule(true).finally(() => { refreshExternal.disabled = false; });
+  const portalRefresh = $('#schedule-portal-refresh');
+  if (portalRefresh) {
+    portalRefresh.addEventListener('click', () => {
+      portalRefresh.disabled = true;
+      loadPortalSchedule(true).finally(() => { portalRefresh.disabled = false; });
+    });
+  }
+  const portalList = $('#schedule-portal-list');
+  if (portalList) {
+    portalList.addEventListener('click', async (event) => {
+      const importButton = event.target.closest('[data-import-fixture]');
+      if (!importButton) return;
+      const payload = JSON.parse(importButton.dataset.importFixture);
+      try {
+        await requestJSON('/schedule', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        showToast('Импортировано в ручное расписание — можно заморозить.', 'success');
+        await loadSchedule();
+      } catch (error) {
+        showToast(describeError(error), 'error');
+      }
+    });
+  }
     });
   }
   const externalList = $('#schedule-external-list');
