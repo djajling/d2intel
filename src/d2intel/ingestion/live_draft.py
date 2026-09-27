@@ -77,6 +77,71 @@ def find_live_game(
     return None
 
 
+
+# --------------------------------------------------------------------------- #
+# STRATZ (платный лимит free-tier): live с пиками и банами — по ключу владельца
+# ---------------------------------------------------------------------------
+
+STRATZ_GRAPHQL = "https://api.stratz.com/graphql"
+
+
+def _stratz_key() -> str | None:
+    """Ключ STRATZ из .env корня репозитория (в git не попадает)."""
+    env_path = Path(__file__).resolve().parents[3] / ".env"
+    if not env_path.exists():
+        return None
+    for line in env_path.read_text(encoding="utf-8").splitlines():
+        if line.startswith("STRATZ_API_KEY="):
+            return line.split("=", 1)[1].strip() or None
+    return None
+
+
+def stratz_live_match(
+    *,
+    team_a: str,
+    team_b: str,
+    client: httpx.Client | None = None,
+) -> dict[str, Any] | None:
+    """Живой матч STRATZ с пиками и банами, если игра найдена.
+
+    Ограничения free-tier жёсткие (проба 2026-09-27: блок по IP до 15 минут) —
+    вызывать НЕ чаще раза в минуту и только когда игра реально идёт.
+    """
+    key = _stratz_key()
+    if key is None:
+        return None
+    client = client or httpx.Client()
+    query = {
+        "query": (
+            "{ live { matches { matchId gameState gameTime "
+            "league { id displayName } "
+            "radiantTeam { name } direTeam { name } "
+            "players { heroId slot team } } } }"
+        )
+    }
+    response = client.post(
+        STRATZ_GRAPHQL,
+        json=query,
+        headers={
+            "Authorization": f"Bearer {key}",
+            "User-Agent": "STRATZ_API",
+            "Content-Type": "application/json",
+        },
+        timeout=30,
+    )
+    if response.status_code == 403:
+        raise ValueError(f"STRATZ rate limit: {response.text[:150]}")
+    response.raise_for_status()
+    matches = response.json()["data"]["live"]["matches"]
+    a, b = team_a.strip().lower(), team_b.strip().lower()
+    for match in matches:
+        ra = ((match.get("radiantTeam") or {}).get("name") or "").lower()
+        di = ((match.get("direTeam") or {}).get("name") or "").lower()
+        if (a in ra or ra in a) and (b in di or di in b):
+            return match
+        if (a in di or di in a) and (b in ra or ra in b):
+            return match
+    return None
 def draft_progress(
     game: dict[str, Any], hero_names: dict[int, str]
 ) -> dict[str, Any]:

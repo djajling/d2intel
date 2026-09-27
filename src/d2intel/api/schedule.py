@@ -395,6 +395,62 @@ def live_draft_snapshot(db: Session = Depends(get_db)) -> dict[str, Any]:  # noq
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Нет замороженных фикстур для live-наблюдения",
         )
+    # Приоритет: STRATZ (пики + баны, лимит free-tier жёсткий — раз в минуту),
+    # fallback OpenDota /live (только пики).
+    stratz_match = None
+    stratz_error = None
+    try:
+        from d2intel.ingestion.live_draft import stratz_live_match
+
+        stratz_match = stratz_live_match(
+            team_a=row.team_a_label, team_b=row.team_b_label, client=httpx.Client()
+        )
+    except (httpx.HTTPError, ValueError) as exc:
+        stratz_error = str(exc)[:200]
+    if stratz_match is not None:
+        league = stratz_match.get("league") or {}
+        result: dict[str, Any] = {
+            "searching_for": f"{row.team_a_label} vs {row.team_b_label}",
+            "found": True,
+            "source": "stratz",
+            "series_id": stratz_match.get("matchId"),
+            "league_name": (league or {}).get("displayName"),
+            "game_time_seconds": stratz_match.get("gameTime"),
+            "radiant_score": stratz_match.get("radiantScore"),
+            "dire_score": stratz_match.get("direScore"),
+            "radiant_team": (stratz_match.get("radiantTeam") or {}).get("name"),
+            "dire_team": (stratz_match.get("direTeam") or {}).get("name"),
+            "radiant_picks": [],
+            "dire_picks": [],
+            "picks_count": 0,
+            "note": "Драфт из STRATZ (пики; баны — если поле присутствует в live-схеме)",
+        }
+        picks_total = 0
+        from d2intel.ingestion.live_draft import load_hero_names
+
+        hero_names = load_hero_names()
+        for player in stratz_match.get("players", []):
+            hero_id = player.get("heroId")
+            entry = {
+                "player": None,
+                "account_id": None,
+                "hero_id": hero_id,
+                "hero": hero_names.get(int(hero_id)) if hero_id else None,
+                "slot": player.get("slot"),
+                "team": player.get("team"),
+            }
+            picks_total += 1 if hero_id else 0
+            (result["radiant_picks"] if player.get("team") == 0 else result["dire_picks"]).append(entry)
+        result["picks_count"] = picks_total
+        result["hero_names_missing"] = True
+        return result
+    if stratz_error:
+        return {
+            "searching_for": f"{row.team_a_label} vs {row.team_b_label}",
+            "found": False,
+            "source": "stratz",
+            "message": f"STRATZ недоступен ({stratz_error}); повтор по лимиту free-tier.",
+        }
     league_id = 20176 if "Wallachia" in (row.tournament_label or "") else None
     try:
         return live_draft_for(
