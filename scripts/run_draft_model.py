@@ -366,7 +366,7 @@ def _evaluate(
     accuracy = accuracy_score(y_true, pred)
     loss = log_loss(y_true, proba, labels=[0, 1])
     ci = grouped_bootstrap_ci(
-        [(row["series_id"], row["y"], p) for row, p in zip(test, pred)],
+        [(row["series_id"], row["y"], p) for row, p in zip(test, pred, strict=True)],
         replicates=replicates,
         seed=seed,
     )
