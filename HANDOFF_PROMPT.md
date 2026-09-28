@@ -975,7 +975,9 @@ BetBoom–OG 13:00). `notify_state` tournament_start count 1→2. Провере
   `scripts/result_cycle.bat` (ingest --head → normalize → backfill drafts --limit
   30 → collect_drafts → close_finished_series → reconcile --all → auto-notify,
   lock от наложения) + `result_cycle_silent.py` + задача `d2intel-result-cycle`
-  в `install_tasks.bat`. **Владелец запускает `install_tasks.bat` от админа.**
+  в `install_tasks.bat`. **ПК не 24/7 (решение владельца 2026-09-28, вечер):
+  основной хост — телефон (Termux), управление через Hermes; `install_tasks.bat`
+  для ПК — запасной путь, не основной.**
 - **Тесты:** +8 в `tests/api/test_notifications.py` (формат попал/не попал,
   стопы без пуша, отправка+идемпотентность, already_reconciled).
 
@@ -988,6 +990,14 @@ tests/api/test_notifications.py tests/test_smoke.py` — **37 passed**;
 **Что произойдёт автоматически:** ближайший 5-мин тик доставит итог Wallachia
 (первый match_result-пуш); завтра freeze за 10 мин до каждого матча →
 match_start с вероятностью; после карт — draft_ready; после reconcile (30-мин
-цикл, когда владелец включит задачу) — match_result. Драфты пишутся в
-`draft_observed`, предикты — в immutable freeze-артефакты. Merge в `main` —
-за владельцем.
+цикл) — match_result. Драфты пишутся в
+`draft_observed`, предикты — в immutable freeze-артефакты.
+
+**UPD вечер: ПК не 24/7 — основной хост телефон (решение владельца).**
+Ветка смержена в `main`, телефон забирает код через `git pull`. Ранбук
+передачи Hermes — в отчёте сессии (мост), коротко: pull main →
+перенос БД с ПК (дамп ~365 МБ + `artifacts/prospective/*.json`, иначе на
+телефоне нет истории/заморозок и предикты будут пустыми) → `.env` с TG-токенами
+→ `alembic upgrade head` → сервер + оба цикла (`run_server.sh`,
+`live_cycle.sh`, `result_cycle.sh`) + Termux:Boot. Merge в `main` выполнен
+интеграцией по команде владельца (ПК уходит в офлайн).
