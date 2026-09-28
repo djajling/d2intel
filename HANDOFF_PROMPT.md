@@ -585,12 +585,23 @@ reconcile это терпимо, но при росте истории потр�
   чистом upstream (проверено через `git stash`), это ограничения окружения,
   не регрессия.
 
-**Не сделано и не заявляется:**
+**Статус деплоя (актуально на 2026-09-28):**
 
-- **Деплой на компьютер владельца не выполнен** — требуется: забрать
-  изменения → `alembic upgrade head` (миграция 0007) → перезапустить uvicorn
-  → добавить `POST /api/schedule/auto-notify` в `scheduled_run.bat` (после
-  `auto-freeze` и `collect_drafts`).
+- Деплой выполнен: изменения на `main` (`f03dfa4`), миграция `0007_notify_state`
+  применена, сервер поднят (`/health` → 200, `database: up`), оба маршрута
+  (`auto-freeze`, `auto-notify`) присутствуют и проверены (dry-run + реальный
+  прогон: `tournament_start` по BLAST доставлен в Telegram, `notify_state`
+  записан).
+- **`auto-notify` добавлен в 5-мин цикл** — `scripts/live_cycle.bat`
+  (коммитнутый, вместо gitignored `artifacts/cache/scheduled_run.bat`):
+  шаги `auto-freeze` → `collect_drafts --all` → `auto-notify`.
+- **Сервер как сервис** — `scripts/run_server.bat` (launcher через `pythonw`,
+  читает `.env`) + `scripts/install_tasks.bat` (регистрирует задачи
+  Планировщика `d2intel-server` / `d2intel-live-cycle` под SYSTEM, переживают
+  ребут). `schtasks` заблокирован в песочнице агента — `install_tasks.bat`
+  запускает **владелец вручную от имени администратора** на своём ПК.
+- Тихий раннер цикла `scripts/live_cycle_silent.py` (коммитнут) заменил
+  untracked `scripts/scheduled_run_silent.py` (удалён).
 
 ### Сессия 2026-09-27 (поздний вечер): баны в STRATZ найдены и включены, ML-003 v2 на 284 парах — порог снова не достигнут, сервер перезапущен
 
@@ -855,26 +866,30 @@ Downgrade не делал.
 `artifacts/cache/run_server_env.bat` (в git не идёт, `artifacts/` в
 gitignore): он читает `.env` и поднимает uvicorn.
 
-**БЛОКЕР 1 (нужно решение владельца): процесс не служба.** Фоновый запуск
-умирает вместе с сессией, которая его породила; создание процесса через WMI
-заблокировано политикой безопасности этого инструмента. Сейчас сервер жив
-(PID 8712), но после перезагрузки или завершения сессии агента он не
-поднимется сам. Варианты: (A) владелец запускает в своём терминале —
-`.\.venv\Scripts\python.exe -m uvicorn d2intel.app:app --host 127.0.0.1 --port 8000`
-из корня клона (env из `.env` поднимает `artifacts/cache/run_server_env.bat`);
-(Б) отдельное решение на задачу Планировщика для сервера — по `REPO_SETUP.md`
-автозапуск не настроен и требует отдельного разрешения.
+**БЛОКЕР 1 — РЕШЕНО (2026-09-28).** Владелец согласовал сервис через
+Планировщик: `scripts/run_server.bat` + `scripts/install_tasks.bat`
+(задача `d2intel-server`, `/sc onstart`, `/ru SYSTEM`, переживает ребут).
+`install_tasks.bat` гасит старый сервер на :8000 и сразу поднимает сервис.
+Запускает владелец вручную (schtasks заблокирован в песочнице агента).
 
-**БЛОКЕР 2 (нужно решение владельца): `auto-notify` не в 5-минутном цикле.**
-`artifacts/cache/scheduled_run.bat` вызывает только `auto-freeze` и
-`collect_drafts`. Маршрут готов и проверен, но по расписанию уведомления не
-уйдут, пока вызов не добавлен в цикл. Это изменение автозапуска — жду
-команды.
+**БЛОКЕР 2 — РЕШЕНО (2026-09-28).** Владелец согласовал добавление
+`auto-notify` в цикл. Коммитнутый `scripts/live_cycle.bat` вызывает
+`auto-freeze` → `collect_drafts --all` → `auto-notify` (тот же порядок жизни
+фикстуры). Задача `d2intel-live-cycle` (`/sc minute /mo 5`) гонит его.
+Проверено реальным прогоном: `tournament_start` (BLAST) доставлен.
 
-**Чужой untracked-файл:** `scripts/scheduled_run_silent.py` (раннер цикла
-через `pythonw`, чтобы консоль не крала фокус у Dota) — файл предыдущего
-агента, я его **не коммитил** и не проверял. Решение владельца: коммитить или
-удалить.
+**Цикл/сервис:** старые gitignored `artifacts/cache/scheduled_run.bat`,
+`scheduled_run_hidden.vbs`, `run_server_env.bat` теперь дублируются
+коммитнутыми `scripts/live_cycle.bat` / `live_cycle_silent.py` /
+`run_server.bat`; не удалял (не мешают), но источник правды — `scripts/`.
+
+**ИЗВЕСТНОЕ (фикстура Wallachia):** fixtures `4180915e…` (Team Yandex vs
+Natus Vincere, «PGL Wallachia S9 - Playoffs», Bo5) имеет `draft_observed` и
+статус started — при реальном прогоне `auto-notify` по ней ушёл `draft_ready`
+(и `match_start` вернул `send_failed`, транзитно). Wallachia S9 владелец
+считает закрытой (финал 27.09, Yandex 3:0 NaVi). Вероятно устаревшая/
+дублирующая фикстура — решение владельца: почистить или оставить. Не блокирует
+BLAST (фильтр `blast slam viii`).
 
 ## Продуктовые ориентиры и gates
 
