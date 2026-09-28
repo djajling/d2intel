@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -24,12 +25,16 @@ from sqlalchemy.orm import Session
 
 from d2intel.api.notifications import (
     DRAFT_READY,
+    MATCH_RESULT,
     MATCH_START,
+    _fetch_evaluation,
     _probability_block,
     build_draft_message,
+    build_match_result_message,
     build_match_start_message,
     build_tournament_start_message,
     trigger_draft_ready,
+    trigger_match_result,
     trigger_match_start,
     trigger_tournament_start,
 )
@@ -67,14 +72,17 @@ def _create_fixture(
     scheduled_at: datetime | None = NOW,
     status: str = "upcoming",
     draft_observed: dict[str, Any] | None = None,
+    freeze_id: str | None = None,
 ) -> str:
     row = db.execute(
         text(
             """
             INSERT INTO scheduled_match
                 (tournament_label, team_a_label, team_b_label, stage_label,
-                 scheduled_at, status, draft_observed)
-            VALUES (:tournament, :a, :b, 'Bo3', :at, :status, CAST(:draft AS jsonb))
+                 scheduled_at, status, draft_observed, freeze_id)
+            VALUES (:tournament, :a, :b, 'Bo3', :at, :status,
+                    CAST(:draft AS jsonb),
+                    CAST(:freeze AS uuid))
             RETURNING id
             """
         ),
@@ -85,6 +93,7 @@ def _create_fixture(
             "at": scheduled_at,
             "status": status,
             "draft": json.dumps(draft_observed) if draft_observed else None,
+            "freeze": freeze_id,
         },
     ).scalar_one()
     db.commit()
@@ -355,6 +364,26 @@ def test_send_failure_does_not_mark_sent(db_session: Session) -> None:
 # Эндпоинт авто-цикла
 # ---------------------------------------------------------------------------
 
+def test_match_start_skipped_when_freeze_reconciled(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+) -> None:
+    """Сыгранный матч: «старт» не пушим задним числом, итог — через match_result."""
+    _point_repo_root(monkeypatch, tmp_path)
+    _write_freeze_artifact(
+        tmp_path, FAKE_FREEZE, {"p_a": 0.56, "p_b": 0.44, "reconciled": True}
+    )
+    fixture_id = _create_fixture(
+        db_session,
+        scheduled_at=NOW - timedelta(hours=1),
+        status="frozen",
+        freeze_id=FAKE_FREEZE,
+    )
+    result = trigger_match_start(
+        db_session, fixture_id=fixture_id, now=NOW, sender=lambda t: True
+    )
+    assert result["status"] == "already_reconciled"
+    assert _sent_kinds(db_session, fixture_id) == set()
+
 def test_auto_notify_endpoint_smoke(api: TestClient) -> None:
     response = api.post("/api/schedule/auto-notify", params={"dry_run": True})
     assert response.status_code == 200
@@ -407,3 +436,150 @@ def test_auto_notify_endpoint_sends_for_real(
 def _all_sent_kinds(db: Session) -> set[str]:
     rows = db.execute(text("SELECT kind FROM scheduled_match_notify_state")).scalars()
     return set(rows)
+
+
+# ---------------------------------------------------------------------------
+# Итог матча (NOTIF-002)
+# ---------------------------------------------------------------------------
+
+FAKE_FREEZE = "11111111-1111-1111-1111-111111111111"
+
+
+def _write_freeze_artifact(root: Any, freeze_id: str, payload: dict[str, Any]) -> None:
+    target = root / "artifacts" / "prospective"
+    target.mkdir(parents=True, exist_ok=True)
+    (target / f"{freeze_id}.json").write_text(
+        json.dumps(payload, ensure_ascii=False), encoding="utf-8"
+    )
+
+
+def _point_repo_root(monkeypatch: pytest.MonkeyPatch, root: Any) -> None:
+    monkeypatch.setattr("d2intel.api.schedule.REPO_ROOT", root)
+
+
+def _fixture_dict() -> dict[str, Any]:
+    return {"team_a_label": "Team Yandex", "team_b_label": "Natus Vincere"}
+
+
+def test_match_result_message_hit() -> None:
+    text_body = build_match_result_message(
+        tournament=TOURNAMENT,
+        fixture=_fixture_dict(),
+        p_a=0.56,
+        won_team_a=True,
+        log_loss=0.5815,
+        brier=0.1944,
+        game_event_time="2026-09-29T13:00:00+03:00",
+        freeze_id=FAKE_FREEZE,
+    )
+    assert "победил Team Yandex" in text_body
+    assert "попали" in text_body
+    assert "56%" in text_body
+    # Счёт серии не выдумываем — его нет в reconcile (время "13:00" счётом не считать).
+    assert re.search(r"(?<!\d)[0-3]:[0-2](?!\d)", text_body) is None
+
+
+def test_match_result_message_miss() -> None:
+    text_body = build_match_result_message(
+        tournament=TOURNAMENT,
+        fixture=_fixture_dict(),
+        p_a=0.56,
+        won_team_a=False,
+        log_loss=0.9,
+        brier=0.3,
+        game_event_time="2026-09-29T13:00:00+03:00",
+        freeze_id=FAKE_FREEZE,
+    )
+    assert "победил Natus Vincere" in text_body
+    assert "не попали" in text_body
+
+
+def test_match_result_no_freeze_no_push(db_session: Session) -> None:
+    fixture_id = _create_fixture(db_session)
+    result = trigger_match_result(db_session, fixture_id=fixture_id, sender=lambda t: True)
+    assert result["status"] == "no_freeze"
+    assert _sent_kinds(db_session, fixture_id) == set()
+
+
+def test_match_result_not_reconciled_no_push(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+) -> None:
+    _point_repo_root(monkeypatch, tmp_path)
+    _write_freeze_artifact(
+        tmp_path, FAKE_FREEZE, {"p_a": 0.56, "p_b": 0.44, "reconciled": False}
+    )
+    fixture_id = _create_fixture(db_session, freeze_id=FAKE_FREEZE)
+    result = trigger_match_result(db_session, fixture_id=fixture_id, sender=lambda t: True)
+    assert result["status"] == "not_reconciled"
+    assert _sent_kinds(db_session, fixture_id) == set()
+
+
+def test_match_result_evaluation_missing_no_push(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+) -> None:
+    _point_repo_root(monkeypatch, tmp_path)
+    _write_freeze_artifact(
+        tmp_path,
+        FAKE_FREEZE,
+        {
+            "p_a": 0.56,
+            "p_b": 0.44,
+            "reconciled": True,
+            "reconciled_with": {
+                "game_id": "00000000-0000-0000-0000-000000000000",
+                "snapshot_id": "22222222-2222-2222-2222-222222222222",
+                "event_time": "2026-09-29T13:00:00+03:00",
+            },
+        },
+    )
+    fixture_id = _create_fixture(db_session, freeze_id=FAKE_FREEZE)
+    result = trigger_match_result(db_session, fixture_id=fixture_id, sender=lambda t: True)
+    assert result["status"] == "evaluation_missing"
+    assert _sent_kinds(db_session, fixture_id) == set()
+
+
+def test_fetch_evaluation_unknown_snapshot_returns_none(db_session: Session) -> None:
+    assert (
+        _fetch_evaluation(db_session, "33333333-3333-3333-3333-333333333333") is None
+    )
+
+
+def test_match_result_sends_hit_and_idempotent(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+) -> None:
+    _point_repo_root(monkeypatch, tmp_path)
+    _write_freeze_artifact(
+        tmp_path,
+        FAKE_FREEZE,
+        {
+            "p_a": 0.56,
+            "p_b": 0.44,
+            "reconciled": True,
+            "reconciled_with": {
+                "game_id": "00000000-0000-0000-0000-000000000000",
+                "snapshot_id": "44444444-4444-4444-4444-444444444444",
+                "event_time": "2026-09-29T13:00:00+03:00",
+            },
+        },
+    )
+    monkeypatch.setattr(
+        "d2intel.api.notifications._fetch_evaluation",
+        lambda db, sid: {"y": True, "log_loss": 0.5815, "brier": 0.1944},
+    )
+    fixture_id = _create_fixture(db_session, freeze_id=FAKE_FREEZE)
+    captured: list[str] = []
+    result = trigger_match_result(
+        db_session, fixture_id=fixture_id, sender=lambda t: captured.append(t) or True
+    )
+    assert result["status"] == "sent"
+    assert result["hit"] is True
+    assert MATCH_RESULT in _sent_kinds(db_session, fixture_id)
+    assert "победил Team Yandex" in captured[0]
+    assert "попали" in captured[0]
+
+    # Повтор — идемпотентность, второй пуш не уходит.
+    repeat = trigger_match_result(
+        db_session, fixture_id=fixture_id, sender=lambda t: captured.append(t) or True
+    )
+    assert repeat["status"] == "already_sent"
+    assert len(captured) == 1

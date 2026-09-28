@@ -3,7 +3,7 @@ setlocal
 rem 5-минутный цикл живого турнира (NOTIF-001 + авто-фриз):
 rem   1) Портал Liquipedia -> импорт матча -> заморозка за 10 мин -> пуш в Telegram
 rem   2) Сбор драфтов доигранных карт (Gate-2), идемпотентен
-rem   3) Уведомления: старт турнира / старт матча / готовый драфт
+rem   3) Уведомления: старт турнира / старт матча / готовый драфт / итог матча
 rem Запускается тихо через scripts/live_cycle_silent.py (pythonw, CREATE_NO_WINDOW).
 set ROOT=C:\Users\SystemX\ZCodeProject\d2intel
 set LOG=%ROOT%\artifacts\cache\scheduled_run.log
@@ -23,7 +23,7 @@ if errorlevel 1 echo %date% %time% auto-freeze FAILED >> "%LOG%"
 rem 2) Сбор драфтов доигранных карт (Gate-2). Уже собранное пропускает.
 "%ROOT%\.venv\Scripts\python.exe" "%ROOT%\scripts\collect_drafts.py" --all >> "%LOG%" 2>&1
 
-rem 3) Уведомления (NOTIF-001): турнир / старт матча / готовый драфт.
+rem 3) Уведомления (NOTIF-001 + NOTIF-002): турнир / старт матча / готовый драфт / итог.
 curl -s -m 120 -X POST http://127.0.0.1:8000/api/schedule/auto-notify >> "%LOG%" 2>&1
 if errorlevel 1 echo %date% %time% auto-notify FAILED >> "%LOG%"
 

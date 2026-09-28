@@ -949,3 +949,45 @@ BLAST (фильтр `blast slam viii`).
 **Что в репо (`feat/notif-001`):** 2 коммита — NOTIF-001 (47 passed) и LLM-эпик (35 passed, 80% acc на живых данных, 1 фабрикация заблокирована). Деплой: `git fetch origin; git checkout feat/notif-001; alembic upgrade head; ruff check src tests; pytest; restart uvicorn; add POST /api/schedule/auto-notify to scheduled_run.bat`.
 
 **Запреты по памяти:** не передаю логин/пароль WorkBuddy; не изобретаю драфты/счёт; не удаляю `HANDOFF_PROMPT.md`; не запускаю авто-цикл в чате.
+
+### Сессия 2026-09-28 (вечер): NOTIF-002 — итог матча в TG + digest завтрашних матчей (ветка `feat/match-result-notify`, НЕ в main)
+
+**Заказ владельца:** сейчас — уведомления о завтрашних матчах; на старте —
+драфты и предикт (с записью данных); после матча — кто победил + наш предикт.
+
+**Digest отправлен сразу (23:xx):** force-повтор `tournament_start` по BLAST
+Slam VIII — 8 фикстур (29.09: 6 матчей 13:00/16:00/19:00 МСК; 30.09: Yandex–MOUZ,
+BetBoom–OG 13:00). `notify_state` tournament_start count 1→2. Проверено чтением БД.
+
+**Что сделано (ветка `feat/match-result-notify`):**
+- **Миграция `0008_match_result_notify`** — CHECK `scheduled_match_notify_kind`
+  расширен 4-м видом `match_result` (таблица/идемпотентность не менялись).
+  Бэкап до миграции: `artifacts/backups/d2intel_2026-09-28_pre0008.dump` (365 МБ).
+  БД: `0007` → **`0008 (head)`**.
+- **`notifications.py`:** `MATCH_RESULT` + `build_match_result_message()` (факт по
+  канонической `prediction_evaluation` + предикт из freeze + попали/нет +
+  log_loss/brier; счёт серии не указываем — его нет в reconcile) +
+  `trigger_match_result()` (стопы без пуша: `no_freeze`/`not_reconciled`/
+  `evaluation_missing`) + guard в `trigger_match_start`: сыгранная
+  (reconciled) фикстура «старт» задним числом не пушит (`already_reconciled`).
+- **`schedule.py` `auto_notify`:** шаг 4 — итог для фикстур с freeze_id; kinds=4.
+- **Result-cycle (решение владельца: отдельная задача каждые 30 мин):**
+  `scripts/result_cycle.bat` (ingest --head → normalize → backfill drafts --limit
+  30 → collect_drafts → close_finished_series → reconcile --all → auto-notify,
+  lock от наложения) + `result_cycle_silent.py` + задача `d2intel-result-cycle`
+  в `install_tasks.bat`. **Владелец запускает `install_tasks.bat` от админа.**
+- **Тесты:** +8 в `tests/api/test_notifications.py` (формат попал/не попал,
+  стопы без пуша, отправка+идемпотентность, already_reconciled).
+
+**Проверки:** `ruff` чисто; `mypy src` чисто (52 файла); `pytest
+tests/api/test_notifications.py tests/test_smoke.py` — **37 passed**;
+`tests/test_migrations.py` + `tests/llm` — зелёные. Сервер перезапущен
+(runtime-код менялся), `/health` 200, dry_run на живых данных: итог Wallachia
+(Yandex победил, попали, 0.5815/0.1944) формируется корректно.
+
+**Что произойдёт автоматически:** ближайший 5-мин тик доставит итог Wallachia
+(первый match_result-пуш); завтра freeze за 10 мин до каждого матча →
+match_start с вероятностью; после карт — draft_ready; после reconcile (30-мин
+цикл, когда владелец включит задачу) — match_result. Драфты пишутся в
+`draft_observed`, предикты — в immutable freeze-артефакты. Merge в `main` —
+за владельцем.

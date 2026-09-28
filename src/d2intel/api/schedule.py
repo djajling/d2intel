@@ -450,7 +450,7 @@ def auto_notify(
     force: bool = Query(default=False),
     dry_run: bool = Query(default=False),
 ) -> dict[str, Any]:
-    """Авто-уведомления (NOTIF-001): турнир / старт игры / драфт.
+    """Авто-уведомления (NOTIF-001 + NOTIF-002): турнир / старт игры / драфт / итог.
 
     Идемпотентно для повторных вызовов каждые 5 минут: состояние отправок
     хранится в ``scheduled_match_notify_state`` (миграция 0006).
@@ -470,9 +470,11 @@ def auto_notify(
 
     from d2intel.api.notifications import (
         DRAFT_READY,
+        MATCH_RESULT,
         MATCH_START,
         TOURNAMENT_START,
         trigger_draft_ready,
+        trigger_match_result,
         trigger_match_start,
         trigger_tournament_start,
     )
@@ -549,11 +551,27 @@ def auto_notify(
             )
         )
 
+    # 4. Итог матча (NOTIF-002) — только для фикстур с заморозкой:
+    #    триггер сам проверяет reconciled + каноническую оценку.
+    result_rows = db.execute(
+        text("SELECT id FROM scheduled_match WHERE freeze_id IS NOT NULL")
+    ).all()
+    for row in result_rows:
+        results.append(
+            trigger_match_result(
+                db,
+                fixture_id=str(row.id),
+                sender=sender,
+                force=force,
+                skip_mark=dry_run,
+            )
+        )
+
     # Маркеруем kinds в ответе для читаемого лога авто-цикла.
     return {
         "checked_at": now.isoformat(),
         "tournament_filter": tournament,
-        "kinds": [TOURNAMENT_START, MATCH_START, DRAFT_READY],
+        "kinds": [TOURNAMENT_START, MATCH_START, DRAFT_READY, MATCH_RESULT],
         "results": results,
         "sent": sum(1 for r in results if r.get("status") == "sent"),
         "failed": sum(1 for r in results if r.get("status") == "send_failed"),

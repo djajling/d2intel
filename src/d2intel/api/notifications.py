@@ -9,6 +9,11 @@
   замороженная вероятность, если freeze уже есть.
 * ``draft_ready`` — драфт собран: пики/баны по сторонам + вероятность из
   заморозки (модель не принята — пометка обязательна).
+* ``match_result`` — итог после матча (NOTIF-002): кто реально победил
+  по каноническому исходу + какой предикт давали мы до матча (попали/нет,
+  log_loss/brier). Уходит только по reconciled-заморозке: факт берётся из
+  `prediction_evaluation`, а не из портала, иначе пуш может разойтись
+  с официальным вердиктом.
 
 Идемпотентность — таблица ``scheduled_match_notify_state``: ключ
 ``(fixture_id, kind)``. Авто-цикл дёргает эндпоинт раз в 5 минут; без
@@ -39,11 +44,13 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-#: Виды уведомлений. Любое добавление — миграция CHECK-констрейнта 0006.
+#: Виды уведомлений. Любое добавление — миграция CHECK-констрейнта
+#: (0007 создал, 0008 добавил match_result).
 TOURNAMENT_START = "tournament_start"
 MATCH_START = "match_start"
 DRAFT_READY = "draft_ready"
-KINDS = (TOURNAMENT_START, MATCH_START, DRAFT_READY)
+MATCH_RESULT = "match_result"
+KINDS = (TOURNAMENT_START, MATCH_START, DRAFT_READY, MATCH_RESULT)
 
 #: Пометка о статусе модели: порог ADR-007 (0.70) не достигнут ни одной
 #: из обученных моделей (ML-001 0.56, ML-002/ML-003 0.60–0.67 на малых n).
@@ -222,8 +229,7 @@ def build_match_start_message(
     return "\n".join(lines)
 
 
-def build_draft_message(
-    *,
+def build_draft_message(    *,
     tournament: str,
     fixture: dict[str, Any],
     map_entry: dict[str, Any],
@@ -242,6 +248,81 @@ def build_draft_message(
     lines.append(_draft_block(map_entry.get("draft"), hero_names))
     lines.append(_probability_block(p_a, fixture["team_a_label"], fixture["team_b_label"]))
     return "\n".join(lines)
+
+
+def build_match_result_message(
+    *,
+    tournament: str,
+    fixture: dict[str, Any],
+    p_a: float,
+    won_team_a: bool,
+    log_loss: float | None,
+    brier: float | None,
+    game_event_time: Any,
+    freeze_id: str,
+) -> str:
+    """Сообщение об итоге матча: факт + наш предикт до матча.
+
+    Счёт серии не указываем — reconcile связывает карту 1, а не серию;
+    выдуманный счёт запрещён правилами проекта.
+    """
+    team_a, team_b = fixture["team_a_label"], fixture["team_b_label"]
+    winner = team_a if won_team_a else team_b
+    predicted = team_a if p_a >= 0.5 else team_b
+    verdict = "попали" if predicted == winner else "не попали"
+    lines = [
+        f"d2intel: итог — {team_a} vs {team_b}",
+        f"Турнир: {tournament}",
+        f"Карта 1 сыграна: {_format_dt(game_event_time)}",
+        f"Факт: победил {winner}",
+        f"Наш предикт до матча (freeze {freeze_id[:8]}):",
+        _probability_block(p_a, team_a, team_b),
+        f"Ставили на: {predicted} — {verdict}",
+    ]
+    if log_loss is not None and brier is not None:
+        lines.append(f"log_loss {log_loss:.4f}, brier {brier:.4f}")
+    return "\n".join(lines)
+
+
+def _load_reconciled_artifact(
+    freeze_id: str,
+) -> tuple[dict[str, Any] | None, str]:
+    """Immutable-артефакт заморозки + статус готовности к итогу.
+
+    Возвращает (payload, status): status `ready` — reconcile состоялся,
+    `not_reconciled` — игра ещё не связана (пушить нечего),
+    `freeze_artifact_missing` / `freeze_artifact_broken` — честные стопы.
+    """
+    from d2intel.api.schedule import REPO_ROOT
+
+    path = REPO_ROOT / "artifacts" / "prospective" / f"{freeze_id}.json"
+    if not path.exists():
+        return None, "freeze_artifact_missing"
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None, "freeze_artifact_broken"
+    if not payload.get("reconciled"):
+        return None, "not_reconciled"
+    return payload, "ready"
+
+
+def _fetch_evaluation(db: Session, snapshot_id: str) -> dict[str, Any] | None:
+    """Каноническая оценка по snapshot_id из reconcile (или None)."""
+    row = db.execute(
+        text(
+            "SELECT y, log_loss, brier FROM prediction_evaluation "
+            "WHERE snapshot_id = CAST(:id AS uuid) "
+            "ORDER BY evaluated_at DESC, id DESC LIMIT 1"
+        ),
+        {"id": snapshot_id},
+    ).first()
+    if row is None:
+        return None
+    mapping = dict(row._mapping)
+    if mapping.get("y") is None:
+        return None
+    return mapping
 
 
 # ---------------------------------------------------------------------------
@@ -382,7 +463,7 @@ def trigger_match_start(
         text(
             """
             SELECT id, tournament_label, team_a_label, team_b_label, stage_label,
-                   scheduled_at, status
+                   scheduled_at, status, freeze_id
             FROM scheduled_match
             WHERE id = CAST(:id AS uuid)
             """
@@ -395,6 +476,13 @@ def trigger_match_start(
     fixture = dict(row._mapping)
     if fixture["status"] not in ("upcoming", "frozen"):
         return {"fixture_id": fixture_id, "status": f"status_{fixture['status']}"}
+
+    # Заморозка уже связана с сыгранной картой — матч кончился, «старт»
+    # слать поздно и бессмысленно; итог уходит через match_result (NOTIF-002).
+    if fixture.get("freeze_id") is not None:
+        _artifact, ready = _load_reconciled_artifact(str(fixture["freeze_id"]))
+        if ready == "ready":
+            return {"fixture_id": fixture_id, "status": "already_reconciled"}
 
     start = fixture["scheduled_at"]
     if start is None:
@@ -491,4 +579,79 @@ def trigger_draft_ready(
     )
     if result["status"] == "sent":
         result["p_a"] = p_a
+    return result
+
+
+def trigger_match_result(
+    db: Session,
+    *,
+    fixture_id: str,
+    sender: Any = None,
+    force: bool = False,
+    skip_mark: bool = False,
+) -> dict[str, Any]:
+    """Уведомление об итоге матча (NOTIF-002).
+
+    Условие: у фикстуры есть freeze_id и его артефакт reconciled, а в
+    `prediction_evaluation` лежит каноническая оценка. Иначе — честный
+    статус без пуша (`no_freeze` / `not_reconciled` / `evaluation_missing`):
+    непроверенный исход не рассылаем.
+    """
+    row = db.execute(
+        text(
+            """
+            SELECT id, tournament_label, team_a_label, team_b_label, stage_label,
+                   freeze_id
+            FROM scheduled_match
+            WHERE id = CAST(:id AS uuid)
+            """
+        ),
+        {"id": fixture_id},
+    ).first()
+    if row is None:
+        return {"fixture_id": fixture_id, "status": "not_found"}
+
+    fixture = dict(row._mapping)
+    if fixture.get("freeze_id") is None:
+        return {"fixture_id": fixture_id, "status": "no_freeze"}
+
+    freeze_id = str(fixture["freeze_id"])
+    artifact, ready = _load_reconciled_artifact(freeze_id)
+    if artifact is None:
+        return {"fixture_id": fixture_id, "status": ready}
+
+    reconciled_with = artifact.get("reconciled_with") or {}
+    snapshot_id = reconciled_with.get("snapshot_id")
+    if not snapshot_id:
+        return {"fixture_id": fixture_id, "status": "evaluation_missing"}
+    evaluation = _fetch_evaluation(db, str(snapshot_id))
+    if evaluation is None:
+        return {"fixture_id": fixture_id, "status": "evaluation_missing"}
+
+    p_a = artifact.get("p_a")
+    if not isinstance(p_a, int | float):
+        return {"fixture_id": fixture_id, "status": "no_probability"}
+    message = build_match_result_message(
+        tournament=fixture["tournament_label"],
+        fixture=fixture,
+        p_a=float(p_a),
+        won_team_a=bool(evaluation["y"]),
+        log_loss=evaluation.get("log_loss"),
+        brier=evaluation.get("brier"),
+        game_event_time=reconciled_with.get("event_time"),
+        freeze_id=freeze_id,
+    )
+    result = send_notification(
+        db,
+        kind=MATCH_RESULT,
+        fixture_id=fixture_id,
+        text_body=message,
+        force=force,
+        sender=sender,
+        skip_mark=skip_mark,
+    )
+    if result["status"] == "sent":
+        won_team_a = bool(evaluation["y"])
+        result["hit"] = (float(p_a) >= 0.5) == won_team_a
+        result["y"] = won_team_a
     return result
