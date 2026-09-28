@@ -13,7 +13,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from scripts.collect_drafts import build_map_entry, merge_maps
 
@@ -22,7 +22,7 @@ GAME = {
     "map_number": None,
     "status": "map_index_unresolved",
     "provider_match_id": "9018736585",
-    "event_time": datetime(2026, 9, 27, 15, 52, 7, tzinfo=timezone.utc),
+    "event_time": datetime(2026, 9, 27, 15, 52, 7, tzinfo=UTC),
     "winner_team_id": "b22c1f38-cd0d-5d89-a5c3-648f75d4bb03",
 }
 
@@ -165,7 +165,7 @@ def test_merge_keeps_existing_maps_and_orders_by_time() -> None:
             provider_match_id="9018700000",
             map_number=2,
             status="completed",
-            event_time=datetime(2026, 9, 27, 17, 0, 0, tzinfo=timezone.utc),
+            event_time=datetime(2026, 9, 27, 17, 0, 0, tzinfo=UTC),
         ),
         payload=_payload([{"is_pick": True, "hero_id": 36, "team": 1, "order": 1}]),
         hero_names={36: "Necrophos"},

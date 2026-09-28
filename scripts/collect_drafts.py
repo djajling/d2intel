@@ -37,7 +37,7 @@ import argparse
 import json
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -238,7 +238,7 @@ def merge_maps(existing: dict[str, Any], entries: list[dict[str, Any]]) -> dict[
     )
     result["maps"] = merged
     result["source"] = SOURCE_LABEL
-    result["collected_at"] = datetime.now(timezone.utc).isoformat()
+    result["collected_at"] = datetime.now(UTC).isoformat()
     result["map_note"] = (
         "map_number берётся из канонической игры; null + map_number_status=unresolved "
         "означает, что номер карты не доказан — такие записи в пары Gate-2 не идут."

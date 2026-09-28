@@ -35,12 +35,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import text
-from sqlalchemy.orm import Session
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, log_loss
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
+from sqlalchemy import text
+from sqlalchemy.orm import Session
 
 from d2intel.db import SessionLocal
 
@@ -366,7 +366,7 @@ def _evaluate(
     accuracy = accuracy_score(y_true, pred)
     loss = log_loss(y_true, proba, labels=[0, 1])
     ci = grouped_bootstrap_ci(
-        [(row["series_id"], row["y"], p) for row, p in zip(test, pred)],
+        [(row["series_id"], row["y"], p) for row, p in zip(test, pred, strict=True)],
         replicates=replicates,
         seed=seed,
     )

@@ -140,7 +140,7 @@ def played_game1(db_session: Session, game_fixture: dict[str, str]) -> dict[str,
 
 
 def _feature_row() -> dict[str, Any]:
-    return {column: 0.1 for column in FEATURE_COLUMNS}
+    return dict.fromkeys(FEATURE_COLUMNS, 0.1)
 
 
 def test_prospective_mode_forbids_assumed_availability(

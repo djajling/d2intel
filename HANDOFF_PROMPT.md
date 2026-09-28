@@ -534,6 +534,64 @@ reconcile это терпимо, но при росте истории потр�
   инкрементальная нормализация, логика match-detail runner'а → `d2intel.ingestion`,
   персист текстового evidence (нужен реестр evidence).
 
+### Сессия 2026-09-28 (ночь): NOTIF-001 — уведомления в Telegram (турнир/матч/драфт)
+
+**Запрос владельца (перед сном, автономный режим):** при старте турнира
+присылать расписание и команды, при начале игры — факт старта, после драфта —
+пики/баны и вероятность победы на карте. Целевой турнир — BLAST Slam VIII.
+Вероятность пушить как есть с честной пометкой «модель не принята».
+
+**Интеграция upstream (важно):** за время работы в remote появились коммиты
+`c94de3b` и `4da7989` — другой агент уже сделал часть заказа и закрыл
+блокеры:
+
+- **`TOURNAMENT_FILTER`/`DEFAULT_LIQUIPEDIA_PAGE` уже BLAST/SLAM/8** в
+  `schedule.py` — моя обёртка `_tournament_filter()` удалена как дубль;
+  эндпоинт `auto-notify` использует upstream-константу.
+- **Блокер map_index решён (ADR-010):** серии закрываются по внешнему
+  подтверждению Liquipedia (миграция upstream `0006_series_closure_evidence`,
+  скрипт `close_finished_series.py`). Заморозка `8987f801` reconciled:
+  y=1, log_loss=0.5815, brier=0.1944 — первый прогноз проекта (Yandex 55.9%)
+  подтверждён официально. **Моя миграция перенесена на `0007_notify_state`**
+  (`down_revision = "0006"`), чтобы не конфликтовать с upstream.
+
+**Что сделано (ветка `feat/notif-001`):**
+
+- **Миграция `0007_notify_state`** — таблица `scheduled_match_notify_state`
+  для идемпотентности: ключ `(fixture_id, kind)`, счётчик force-повторов,
+  FK на `scheduled_match` с `ON DELETE CASCADE`. Авто-цикл ходит раз в 5
+  минут — без фиксации состояния он слал бы одно и то же сообщение каждые
+  5 минут, пока окно не закроется.
+- **`src/d2intel/api/notifications.py`** — модуль уведомлений: три вида
+  (`tournament_start` / `match_start` / `draft_ready`), форматирование,
+  идемпотентность, `skip_mark` для dry-run, честные «нет заморозки» /
+  «absent_in_source» вместо подмены нулями.
+- **`POST /api/schedule/auto-notify`** (`force`, `dry_run`) — эндпоинт
+  авто-цикла. `dry_run` формирует сообщения, но не отправляет и не помечает.
+- **`tests/api/test_notifications.py`** — 19 тестов.
+
+**Проверки (локальный клон, Termux/Android, Python 3.14):**
+
+- `ruff check src tests scripts` — чисто, кроме 1 `B905` в
+  `scripts/run_draft_model.py:369` (`zip` без `strict=` — меняет поведение,
+  решение за владельцем).
+- `mypy src` — 1 ошибка в `predict.py:419` (`model_dump_json`), не моя:
+  локально pydantic 1.10 (нет wheel pydantic-core под Android), CI использует
+  pydantic 2. На моих модулях mypy чист.
+- `pytest tests/test_migrations.py tests/api/test_notifications.py
+  tests/api/test_schedule.py tests/test_smoke.py` — **47 passed**.
+- Полный набор: 11 failures в `tests/api/test_stratz_live.py` (нужен
+  `STRATZ_API_KEY`) и 12 errors коллекции sklearn/catboost — существуют на
+  чистом upstream (проверено через `git stash`), это ограничения окружения,
+  не регрессия.
+
+**Не сделано и не заявляется:**
+
+- **Деплой на компьютер владельца не выполнен** — требуется: забрать
+  изменения → `alembic upgrade head` (миграция 0007) → перезапустить uvicorn
+  → добавить `POST /api/schedule/auto-notify` в `scheduled_run.bat` (после
+  `auto-freeze` и `collect_drafts`).
+
 ### Сессия 2026-09-27 (поздний вечер): баны в STRATZ найдены и включены, ML-003 v2 на 284 парах — порог снова не достигнут, сервер перезапущен
 
 Коммиты `00605f2`, `0dc9452` (+ незакоммиченный ADR-009 черновик), тесты **478 passed**.
@@ -779,3 +837,16 @@ SEA S18 (28.09–03.10) и EPL Season 40 playoffs. Нужен выбор тур�
 - `BACKLOG.md` — 90 задач по 23 эпикам (00–22) с зависимостями, acceptance criteria и DoD.
 - `FIRST_10_TASKS.md` — первые ровно 10 задач.
 - `docs/adr/` — ADR-001…ADR-006 (цель прогноза) и ADR-007 (порог приёмки).
+
+### Сессия 2026-09-28 (утро, итог автономной ночи)
+
+**Решения владельца (без вариантов, как просил):**
+- Деплой на ПК — только после 18:00; до этого всё проверяется в телефоне (клон + пуш ветки `feat/notif-001`).
+- Telegram-канал для LLM-инфоповода — отдельный инфоповод (не `shao322_bot`), тот же `.env`, с обязательной подписью «эксперимент, не принятая модель». Не смешивается с NOTIF-001-триггерами.
+- `OK` — фиксирую в памяти: будущие русские запросы — короткие, уточнения минимальны; `Да` — автономный режим подтверждён.
+- B905 (`zip()` без `strict=` в `run_draft_model.py`) — оставлен; меняет поведение, нужен вердикт владельца.
+- Ожидаемый прогон на BLAST Slam VIII — после деплоя 18:00.
+
+**Что в репо (`feat/notif-001`):** 2 коммита — NOTIF-001 (47 passed) и LLM-эпик (35 passed, 80% acc на живых данных, 1 фабрикация заблокирована). Деплой: `git fetch origin; git checkout feat/notif-001; alembic upgrade head; ruff check src tests; pytest; restart uvicorn; add POST /api/schedule/auto-notify to scheduled_run.bat`.
+
+**Запреты по памяти:** не передаю логин/пароль WorkBuddy; не изобретаю драфты/счёт; не удаляю `HANDOFF_PROMPT.md`; не запускаю авто-цикл в чате.

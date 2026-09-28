@@ -19,6 +19,7 @@ SRC-002), поэтому фикстуры вводятся владельцем 
 
 from __future__ import annotations
 
+import contextlib
 import json
 import subprocess
 import sys
@@ -42,7 +43,7 @@ from d2intel.ingestion.live_draft import live_match_view, load_hero_names
 
 router = APIRouter(prefix="/api/schedule", tags=["schedule"])
 
-REPO_ROOT = Path(__file__).resolve().parents[3]  # (уже определён ниже — оставить один)
+REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_LIQUIPEDIA_PAGE = "BLAST/SLAM/8"
 #: Какой турнир автоцикл считает «своим» (решение владельца 2026-09-27:
 #: Wallachia S9 закрыт 27.09, следующий целевой турнир — BLAST Slam VIII,
@@ -56,6 +57,12 @@ CACHE_DIR = Path("artifacts/cache")
 REPO_ROOT = Path(__file__).resolve().parents[3]
 FREEZE_SCRIPT = REPO_ROOT / "scripts" / "prospective_freeze.py"
 FREEZE_TIMEOUT_SECONDS = 300
+
+#: турнира, название которого содержит эту подстроку. Wallachia S9 закрылась
+#: 2026-09-27 — авто-цикл простаивал. Значение настраивается переменной
+#: окружения D2INTEL_TOURNAMENT_FILTER, чтобы смена турнира не требовала
+#: правки кода (решение владельца 2026-09-28).
+DEFAULT_TOURNAMENT_FILTER = "BLAST"
 
 _SCHEDULE_SQL = """
     SELECT
@@ -426,6 +433,122 @@ def auto_freeze(db: Session = Depends(get_db)) -> dict[str, Any]:  # noqa: B008
     }
 
 
+@router.post("/auto-notify")
+def auto_notify(
+    db: Session = Depends(get_db),  # noqa: B008
+    force: bool = Query(default=False),
+    dry_run: bool = Query(default=False),
+) -> dict[str, Any]:
+    """Авто-уведомления (NOTIF-001): турнир / старт игры / драфт.
+
+    Идемпотентно для повторных вызовов каждые 5 минут: состояние отправок
+    хранится в ``scheduled_match_notify_state`` (миграция 0006).
+
+    Порядок триггеров соответствует жизненному циклу фикстуры:
+    турнир начался → матч начался → драфт собран. Драфт берётся из
+    ``draft_observed`` (собирается `collect_drafts.py` в том же авто-цикле),
+    вероятность — из prospective-заморозки; модель драфт-информированной
+    не является (ADR-006), поэтому состав героев и вероятность в пуше
+    разделены, а к вероятности идёт честная пометка статуса модели.
+
+    ``force=True`` — ручной повтор владельца, игнорирует идемпотентность.
+    ``dry_run=True`` — сформировать сообщения, но не отправлять и не
+    фиксировать отправку: проверка текста перед боевой отправкой.
+    """
+    from datetime import UTC
+
+    from d2intel.api.notifications import (
+        DRAFT_READY,
+        MATCH_START,
+        TOURNAMENT_START,
+        trigger_draft_ready,
+        trigger_match_start,
+        trigger_tournament_start,
+    )
+
+    now = datetime.now(tz=UTC)
+    tournament = TOURNAMENT_FILTER
+    results: list[dict[str, Any]] = []
+
+    # dry-run: сообщения собираются, но не уходят и не помечаются.
+    sender: Any
+    if dry_run:
+        def sender(text_body: str) -> bool:  # noqa: ANN001
+            results.append({"kind": "dry_run", "text": text_body})
+            return True
+    else:
+        sender = None  # реальный Telegram-пуш из schedule.notify_telegram
+
+    # 1. Старт турнира — одна рассылка на весь турнир, а не на каждый матч.
+    results.extend(
+        trigger_tournament_start(
+            db,
+            tournament=tournament,
+            now=now,
+            sender=sender,
+            force=force,
+            skip_mark=dry_run,
+        )
+    )
+
+    # 2. Старт матча — для всех upcoming/frozen фикстур, чьё время пришло.
+    started_rows = db.execute(
+        text(
+            """
+            SELECT id FROM scheduled_match
+            WHERE status IN ('upcoming', 'frozen')
+              AND scheduled_at IS NOT NULL
+            ORDER BY scheduled_at
+            """
+        )
+    ).all()
+    for row in started_rows:
+        results.append(
+            trigger_match_start(
+                db,
+                fixture_id=str(row.id),
+                now=now,
+                sender=sender,
+                force=force,
+                skip_mark=dry_run,
+            )
+        )
+
+    # 3. Драфт — для всех фикстур, где драфт уже собран, но не отправлен.
+    draft_rows = db.execute(
+        text(
+            """
+            SELECT id FROM scheduled_match
+            WHERE draft_observed IS NOT NULL
+              AND COALESCE(
+                  jsonb_array_length(CAST(draft_observed -> 'maps' AS jsonb)), 0
+              ) > 0
+            ORDER BY updated_at
+            """
+        )
+    ).all()
+    for row in draft_rows:
+        results.append(
+            trigger_draft_ready(
+                db,
+                fixture_id=str(row.id),
+                sender=sender,
+                force=force,
+                skip_mark=dry_run,
+            )
+        )
+
+    # Маркеруем kinds в ответе для читаемого лога авто-цикла.
+    return {
+        "checked_at": now.isoformat(),
+        "tournament_filter": tournament,
+        "kinds": [TOURNAMENT_START, MATCH_START, DRAFT_READY],
+        "results": results,
+        "sent": sum(1 for r in results if r.get("status") == "sent"),
+        "failed": sum(1 for r in results if r.get("status") == "send_failed"),
+    }
+
+
 def _stratz_key() -> str | None:
     """Ключ STRATZ из .env (в git не попадает)."""
     env_path = REPO_ROOT / ".env"
@@ -537,10 +660,8 @@ def _stratz_reset_state() -> None:
     """
     _STRATZ_STATE["last_attempt_at"] = 0.0
     _STRATZ_STATE["cooldown_until"] = 0.0
-    try:
+    with contextlib.suppress(OSError):
         STRATZ_STATE_PATH.unlink(missing_ok=True)
-    except OSError:
-        pass
 
 
 _stratz_load_state()
