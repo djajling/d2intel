@@ -27,11 +27,18 @@ def _evidence() -> dict:
 # ── подпись V2 ─────────────────────────────────────────────────────────────
 
 
-def test_sign_is_hmac_of_timestamp_plus_body() -> None:
+def test_sign_is_hmac_of_timestamp_dot_body() -> None:
     ts, body, secret = "1700000000", b'{"a":1}', "s3cret"
-    expected = hmac.new(secret.encode(), ts.encode() + body, hashlib.sha256).hexdigest()
+    expected = hmac.new(secret.encode(), ts.encode() + b"." + body, hashlib.sha256).hexdigest()
     assert hermes.sign(ts, body, secret) == expected
     assert len(hermes.sign(ts, body, secret)) == 64
+
+
+def test_sign_requires_dot_separator() -> None:
+    """Регрессия 2026-09-28: спека без точки давала 401, сервер ждёт ts + b\".\" + body."""
+    ts, body, secret = "1700000000", b'{"a":1}', "s3cret"
+    no_dot = hmac.new(secret.encode(), ts.encode() + body, hashlib.sha256).hexdigest()
+    assert hermes.sign(ts, body, secret) != no_dot
 
 
 def test_sign_order_matters() -> None:

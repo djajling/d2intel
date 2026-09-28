@@ -7,8 +7,9 @@
 Протокол моста (подпись V2, обязательна):
 - POST на `HERMES_BRIDGE_URL` с JSON-телом;
 - заголовки `X-Webhook-Timestamp: <unix>` и `X-Webhook-Signature-V2:
-  hex(HMAC-SHA256(key, timestamp + body))`, где body — сырые байты,
-  ровно как уходят в запрос;
+  hex(HMAC-SHA256(key, timestamp + "." + body))` — точка-разделитель
+  ОБЯЗАТЕЛЬНА (исправление спеки от 2026-09-28: без точки сервер даёт 401),
+  body — сырые байты, ровно как уходят в запрос;
 - ответ асинхронный: `202 {"status": "accepted", "delivery_id": ...}`,
   сам разбор приходит в Telegram, не в HTTP-ответе.
 
@@ -40,8 +41,8 @@ def bridge_url() -> str:
 
 
 def sign(timestamp: str, body: bytes, secret: str) -> str:
-    """Подпись V2: hex HMAC-SHA256 от строки `<timestamp><body>`."""
-    return hmac.new(secret.encode(), timestamp.encode() + body, hashlib.sha256).hexdigest()
+    """Подпись V2: hex HMAC-SHA256 от `<timestamp>.<body>` (точка обязательна)."""
+    return hmac.new(secret.encode(), timestamp.encode() + b"." + body, hashlib.sha256).hexdigest()
 
 
 def build_payload(ev: dict, messages: list[dict], prompt_version: str) -> dict:
