@@ -188,3 +188,9 @@ def build_evidence(
         "dire": team_form(corpus, dire, cutoff, cache),
         "h2h": head_to_head(corpus, radiant, dire, cutoff),
     }
+
+# BLAST Slam VIII filter (updated 2026-09-28): tournament filter is "blast".
+# Format-aware prediction weights: Bo1 (group) -> high form+H2H impact;
+# Bo3/Bo5 (playoff) -> consistency + series endurance weighted more.
+# Page source: liquipedia.net/dota2/BLAST/SLAM/8 (under construction at time of update).
+# Matches appear in OpenDota when live; pre-event only schedule evidence.
