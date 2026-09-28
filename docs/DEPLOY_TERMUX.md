@@ -116,6 +116,13 @@ scripts/termux/run_server.sh
 scripts/termux/live_cycle.sh
 ```
 
+Цикл итогов NOTIF-002 (каждые 30 мин: свежие игры → normalize → драфты →
+закрытие серий → reconcile → итог в TG) — отдельным процессом:
+
+```
+scripts/termux/result_cycle.sh
+```
+
 Проверка:
 
 ```
@@ -151,7 +158,8 @@ pg_restore -h localhost -U d2intel -d d2intel --clean --if-exists d2intel_dump.d
 
 Положи `scripts/termux/boot.sh` в `~/.termux/boot/` и дай права
 `chmod +x ~/.termux/boot/d2intel-boot.sh` (имя файла — любое, главное
-исполняемый и в этом каталоге). `boot.sh` поднимает postgres + сервер + цикл и
+исполняемый и в этом каталоге). `boot.sh` поднимает postgres + сервер +
+5-мин цикл + 30-мин цикл итогов и
 держит `termux-wake-lock`, чтобы телефон не засыпал важным процессам.
 
 В proot-варианте Termux:Boot не сработает напрямую — нужен `./start.sh`

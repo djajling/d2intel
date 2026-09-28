@@ -20,4 +20,7 @@ nohup "$REPO_DIR/scripts/termux/run_server.sh" > "$LOG_DIR/uvicorn.out.log" 2>&1
 # 3) Цикл живого турнира (фон)
 nohup "$REPO_DIR/scripts/termux/live_cycle.sh" > "$LOG_DIR/cycle.out.log" 2>&1 &
 
-echo "d2intel boot: postgres + server + cycle started"
+# 4) Цикл итогов NOTIF-002 (фон, каждые 30 мин)
+nohup "$REPO_DIR/scripts/termux/result_cycle.sh" > "$LOG_DIR/result_cycle.out.log" 2>&1 &
+
+echo "d2intel boot: postgres + server + live-cycle + result-cycle started"
