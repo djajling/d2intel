@@ -1,0 +1,4 @@
+# Termux-скрипты обязаны ехать с LF: CRLF ломает shebang на Android.
+scripts/termux/*.sh text eol=lf
+# Windows-раннеры оставляем как есть (cmd не чувствителен).
+scripts/*.bat text eol=crlf
