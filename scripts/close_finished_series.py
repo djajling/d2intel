@@ -103,7 +103,7 @@ def _norm(name: str | None) -> str:
 
 def parse_score(score: Any) -> tuple[int, int] | None:
     """Счёт портала `['3', '0']` → (3, 0). None, если счёта нет или он битый."""
-    if not isinstance(score, (list, tuple)) or len(score) != 2:
+    if not isinstance(score, list | tuple) or len(score) != 2:
         return None
     try:
         return int(score[0]), int(score[1])

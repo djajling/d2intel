@@ -799,6 +799,83 @@ SEA S18 (28.09–03.10) и EPL Season 40 playoffs. Нужен выбор тур�
 `1w Team vs Natus Vincere` и `Team Yandex vs MOUZ`. Заморозки и пуши пойдут
 по cron за 10 минут до старта.
 
+### Деплой 2026-09-28 (вечер): feat/notif-001 влит в main, NOTIF-001 + LLM-аналитик на борту
+
+**Scope:** интеграция ветки `feat/notif-001` (6 коммитов `22217e9..13ad8d1`) в
+`main`, миграция БД `0007`, обновление running-процесса, проверки. Слияние
+разрешено владельцем для этого пакета.
+
+**Опубликовано:** merge-коммит **`7bf6d7e`** (`origin/main` совпадает), далее
+коммит правок (см. ниже). Ветка принесла: маршрут `/api/schedule/auto-notify`,
+`src/d2intel/api/notifications.py` (триггеры: старт турнира / старт матча /
+драфт), миграцию `0007_notify_state`, LLM-аналитик (`src/d2intel/llm/`),
+скрипт `scripts/llm_predict_experiment.py`, отчёты в `reports/` и тесты
+(`tests/api/test_notifications.py`, `tests/llm/`).
+
+**Правки поверх ветки (мои, две):**
+1. **Фильтр турнира — единая точка.** После merge в `schedule.py` оказалось
+   две константы: моя `TOURNAMENT_FILTER = "blast slam viii"` (использовалась)
+   и веткина `DEFAULT_TOURNAMENT_FILTER = "BLAST"` с env
+   `D2INTEL_TOURNAMENT_FILTER`, которая **не использовалась нигде** — то есть
+   настраиваемость была объявлена, но не работала. Сделал функцию
+   `tournament_filter()`: env-переопределение работает, дефолт остался
+   `blast slam viii` (вчерашнее решение владельца; сужать до одной лиги
+   безопаснее, чем подхватывать все BLAST разом). Мёртвую константу убрал.
+   Тест `test_notifications.py` ожидает именно `blast slam viii` — совпало.
+2. **ruff UP038** — два `isinstance(x, (A, B))` в моём вчерашнем коде
+   (`schedule.py`, `close_finished_series.py`) переписаны на `A | B`.
+
+**Проверки:** `ruff check src tests scripts` — **All checks passed**;
+`mypy src` — **52 файла, чисто**; `pytest tests/test_smoke.py
+tests/api/test_notifications.py` — **29 passed**;
+дополнительно `pytest tests/llm` — **35 passed**.
+`tests/api/test_stratz_live.py` и `tests/models/` не гонял — известные
+зависимости от `STRATZ_API_KEY` и sklearn на этой ОС, по заданию не регрессия.
+Полный suite не запускался: нет выделенной тестовой БД
+(`D2INTEL_TEST_DATABASE_URL`).
+
+**БД:** резервная копия **до** миграции — `artifacts/backups/d2intel_2026-09-28_pre0007.dump`
+(365 МБ, `pg_dump -Fc`, rc=0). `alembic current` было `0006` → `upgrade head` →
+**`0007 (head)`**. Таблица `scheduled_match_notify_state` создана, 0 строк.
+Downgrade не делал.
+
+**Приложение:** запущено по `REPO_SETUP.md` (cwd — корень клона, без
+`--app-dir`), PID **8712**, `GET /health` → **200 `{"status":"ok","app":"d2intel","database":"up"}`**.
+Маршруты в OpenAPI: `/api/schedule/auto-freeze` (POST) и
+`/api/schedule/auto-notify` (POST) — оба присутствуют; UI `/` → 200.
+Проверка NOTIF-001 в безопасном режиме: `POST /api/schedule/auto-notify?dry_run=true`
+сформировал тексты по 8 матчам BLAST Slam VIII и по заморозке Yandex — NaVi
+(честная оговорка «модель не принята: порог ADR-007 не достигнут»);
+`notify_state` после dry-run **пуста** — боевая отправка не блокируется.
+Боевой пуш в Telegram **не отправлял** — это внешнее действие, жду команды.
+
+**Telegram:** `.env` уже содержит `TELEGRAM_BOT_TOKEN` и `TELEGRAM_CHAT_ID`
+(значения не публикую). `config.py` не читает `.env`, поэтому переменные идут
+в окружение процесса — для этого добавлен
+`artifacts/cache/run_server_env.bat` (в git не идёт, `artifacts/` в
+gitignore): он читает `.env` и поднимает uvicorn.
+
+**БЛОКЕР 1 (нужно решение владельца): процесс не служба.** Фоновый запуск
+умирает вместе с сессией, которая его породила; создание процесса через WMI
+заблокировано политикой безопасности этого инструмента. Сейчас сервер жив
+(PID 8712), но после перезагрузки или завершения сессии агента он не
+поднимется сам. Варианты: (A) владелец запускает в своём терминале —
+`.\.venv\Scripts\python.exe -m uvicorn d2intel.app:app --host 127.0.0.1 --port 8000`
+из корня клона (env из `.env` поднимает `artifacts/cache/run_server_env.bat`);
+(Б) отдельное решение на задачу Планировщика для сервера — по `REPO_SETUP.md`
+автозапуск не настроен и требует отдельного разрешения.
+
+**БЛОКЕР 2 (нужно решение владельца): `auto-notify` не в 5-минутном цикле.**
+`artifacts/cache/scheduled_run.bat` вызывает только `auto-freeze` и
+`collect_drafts`. Маршрут готов и проверен, но по расписанию уведомления не
+уйдут, пока вызов не добавлен в цикл. Это изменение автозапуска — жду
+команды.
+
+**Чужой untracked-файл:** `scripts/scheduled_run_silent.py` (раннер цикла
+через `pythonw`, чтобы консоль не крала фокус у Dota) — файл предыдущего
+агента, я его **не коммитил** и не проверял. Решение владельца: коммитить или
+удалить.
+
 ## Продуктовые ориентиры и gates
 
 Статусы решений проверять в `docs/PRD.md` и соответствующих ADR; перечисление стека не переводит Proposed ADR в Accepted.

@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import os
 import subprocess
 import sys
 import time
@@ -58,11 +59,21 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 FREEZE_SCRIPT = REPO_ROOT / "scripts" / "prospective_freeze.py"
 FREEZE_TIMEOUT_SECONDS = 300
 
-#: турнира, название которого содержит эту подстроку. Wallachia S9 закрылась
-#: 2026-09-27 — авто-цикл простаивал. Значение настраивается переменной
-#: окружения D2INTEL_TOURNAMENT_FILTER, чтобы смена турнира не требовала
-#: правки кода (решение владельца 2026-09-28).
-DEFAULT_TOURNAMENT_FILTER = "BLAST"
+#: Переопределение фильтра без правки кода (ветка feat/notif-001, решение
+#: владельца 2026-09-28): смена турнира не должна требовать коммита.
+#: Переменная не задана — работает `TOURNAMENT_FILTER`.
+TOURNAMENT_FILTER_ENV = "D2INTEL_TOURNAMENT_FILTER"
+
+
+def tournament_filter() -> str:
+    """Подстрока целевого турнира для автоцикла (сравнение без регистра).
+
+    Единая точка: и авто-заморозка, и авто-уведомления должны считать
+    «своим» один и тот же турнир, иначе фикстуры уедут в Telegram, а
+    заморозка до старта не сойдётся.
+    """
+    value = os.getenv(TOURNAMENT_FILTER_ENV)
+    return (value or TOURNAMENT_FILTER).strip().lower()
 
 _SCHEDULE_SQL = """
     SELECT
@@ -312,7 +323,7 @@ def auto_freeze(db: Session = Depends(get_db)) -> dict[str, Any]:  # noqa: B008
     """Авто-заморозка (разрешение владельца 2026-09-27): портал → импорт → freeze.
 
     Идемпотентно и безопасно для повторных вызовов:
-    1. Новые предстоящие матчи целевого турнира (`TOURNAMENT_FILTER`) с
+    1. Новые предстоящие матчи целевого турнира (`tournament_filter()`) с
        портала импортируются (без дублей по паре команд среди upcoming).
     2. Фикстуры, до старта которых осталось <= 10 минут, замораживаются
        (через тот же честный CLI; после старта — не замораживаются никогда).
@@ -344,7 +355,7 @@ def auto_freeze(db: Session = Depends(get_db)) -> dict[str, Any]:  # noqa: B008
     for match in portal.get("matches", []):
         if match.get("finished"):
             continue
-        if TOURNAMENT_FILTER not in (match.get("tournament") or "").lower():
+        if tournament_filter() not in (match.get("tournament") or "").lower():
             continue
         pair = (match["teams"][0].strip().lower(), match["teams"][1].strip().lower())
         if pair in existing_labels:
@@ -467,7 +478,7 @@ def auto_notify(
     )
 
     now = datetime.now(tz=UTC)
-    tournament = TOURNAMENT_FILTER
+    tournament = tournament_filter()
     results: list[dict[str, Any]] = []
 
     # dry-run: сообщения собираются, но не уходят и не помечаются.
@@ -624,7 +635,7 @@ def _stratz_load_state() -> None:
     now = time.time()
     for key in ("last_attempt_at", "cooldown_until"):
         value = raw.get(key)
-        if not isinstance(value, (int, float)):
+        if not isinstance(value, int | float):
             continue
         value = float(value)
         if value <= 0:
