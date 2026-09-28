@@ -949,3 +949,43 @@ BLAST (фильтр `blast slam viii`).
 **Что в репо (`feat/notif-001`):** 2 коммита — NOTIF-001 (47 passed) и LLM-эпик (35 passed, 80% acc на живых данных, 1 фабрикация заблокирована). Деплой: `git fetch origin; git checkout feat/notif-001; alembic upgrade head; ruff check src tests; pytest; restart uvicorn; add POST /api/schedule/auto-notify to scheduled_run.bat`.
 
 **Запреты по памяти:** не передаю логин/пароль WorkBuddy; не изобретаю драфты/счёт; не удаляю `HANDOFF_PROMPT.md`; не запускаю авто-цикл в чате.
+
+### Сессия 2026-09-28 (день): Hermes-мост — опциональный LLM-провайдер (ветка `feat/hermes-bridge`, НЕ в main)
+
+**Заказ владельца:** связать OpenCode на ПК с Hermes Agent на Android через
+мост `POST .../webhooks/opencode-agent` (подпись V2 обязательна). В d2intel —
+опциональный провайдер рядом с прямым вызовом Atria, прямой вызов не ломать.
+
+**Что сделано (ветка `feat/hermes-bridge`, 3 файла):**
+- `src/d2intel/llm/hermes.py` (новый) — `sign()` (hex HMAC-SHA256 от
+  `<timestamp><body>`), `build_payload()` (task `analyze_match`, весь контекст:
+  evidence + messages + prompt_version, `expect_reply: true`), `post_to_bridge()`
+  (202 → `{ok, pending, delivery_id}`, остальное — честный `{ok: False, reason}`).
+  Только stdlib (urllib), как в `analyst.py`. Секрет — ТОЛЬКО env
+  `HERMES_BRIDGE_SECRET`, URL — env `HERMES_BRIDGE_URL` (дефолт — временный
+  trycloudflare-URL; при перезапуске туннеля меняется, нужен named tunnel).
+- `src/d2intel/llm/analyst.py` — добавлен `resolve_provider()` +
+  `analyze(ev, provider=None)`: без аргумента и без env `LLM_PROVIDER` путь Atria
+  идёт ровно как раньше; `provider="hermes"` (или env) делегирует в мост и
+  возвращает pending (разбор приходит в Telegram, guardrails к нему неприменимы
+  до синхронного ответа).
+- `scripts/hermes_probe.py` (новый) — `--dry-run` (без сети: сборка payload +
+  подпись) и live-проба одним POST. `tests/llm/test_hermes.py` (новый) — 10
+  тестов: порядок `ts+body` в подписи, форма payload, 202/401 без сети (мок
+  urlopen), дефолт Atria не тронут, hermes-режим не дёргает `_call_llm`.
+- Ключ маршрута записан в локальный `.env` (gitignored, в git не идёт).
+
+**Проверки:** `ruff check src tests scripts` — чисто; `mypy src` — 53 файла,
+чисто; `pytest tests/llm tests/test_smoke.py tests/api/test_notifications.py` —
+**74 passed**. Полный suite не гонял (нужна выделенная тестовая БД).
+
+**БЛОКЕР — live-проба получает 401 (решение/проверка владельца).**
+Три POST (все — одиночные, без спама): `hermes_probe.py`, точный payload из
+примера заказчика ASCII-only через urllib и через httpx (точный регистр
+заголовков) — все `401 {"error": "Invalid signature"}`. Транспорт/кодировка/
+регистр заголовков исключены (httpx шлёт регистр как в спеке). Осталось: (а)
+ключ маршрута протух/сменился; (б) схема проверки на Android отличается от спеки
+(разделитель, base64, другой порядок). Нужны: актуальный ключ (перевыдача на
+Android) и/или лог вебхук-сессии со стороны Android (что принято, что ожидалось).
+Код провайдера от блокера не зависит — ветку можно ревьюить и мержить.
+Merge в `main` — за владельцем.

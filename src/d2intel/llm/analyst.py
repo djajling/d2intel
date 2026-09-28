@@ -8,6 +8,9 @@
 - промпт версионирован.
 
 Провайдер: Atria (Atria-Dawn-Preview) — бесплатный для текущего проекта.
+Опционально — Hermes-мост на Android-хост (`d2intel.llm.hermes`):
+выбор через `analyze(ev, provider="hermes")` или env `LLM_PROVIDER=hermes`.
+По умолчанию прямой вызов Atria не меняется.
 """
 
 from __future__ import annotations
@@ -154,8 +157,27 @@ def guard(pred: dict, ev: dict) -> dict:
     return {"ok": True, "p_radiant": p, "reason": reason, "key_factor": key}
 
 
-def analyze(ev: dict) -> dict:
-    """Полный цикл: промпт → LLM → парсинг → guardrails."""
+def resolve_provider(explicit: str | None = None) -> str:
+    """Какой провайдер использовать: явный аргумент > env `LLM_PROVIDER` > atria."""
+    if explicit:
+        return explicit
+    return os.environ.get("LLM_PROVIDER", "atria")
+
+
+def analyze(ev: dict, provider: str | None = None) -> dict:
+    """Полный цикл: промпт → LLM → парсинг → guardrails.
+
+    `provider="hermes"` (или env `LLM_PROVIDER=hermes`) отправляет запрос
+    в Hermes-мост и возвращает `pending`-ответ: сам разбор приходит
+    в Telegram, не в HTTP-ответе. Прямой путь Atria без аргумента не меняется.
+    """
+    chosen = resolve_provider(provider)
+    if chosen == "hermes":
+        from d2intel.llm.hermes import analyze_via_hermes
+
+        out = analyze_via_hermes(ev, build_messages(ev), PROMPT_VERSION)
+        out.setdefault("prompt_version", PROMPT_VERSION)
+        return out
     try:
         raw = _call_llm(build_messages(ev))
         text = raw["choices"][0]["message"]["content"].strip()
