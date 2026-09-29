@@ -360,12 +360,21 @@ def test_send_failure_does_not_mark_sent(db_session: Session) -> None:
     )
 
 
+def test_match_start_too_late_without_freeze(db_session: Session) -> None:
+    """Незамороженный матч 5-часовой давности: «старт» не пушим задним числом."""
+    fixture_id = _create_fixture(db_session, scheduled_at=NOW - timedelta(hours=5))
+    result = trigger_match_start(
+        db_session, fixture_id=fixture_id, now=NOW, sender=lambda t: True
+    )
+    assert result["status"] == "too_late_for_start"
+    assert _sent_kinds(db_session, fixture_id) == set()
+
+
 # ---------------------------------------------------------------------------
 # Эндпоинт авто-цикла
 # ---------------------------------------------------------------------------
 
-def test_match_start_skipped_when_freeze_reconciled(
-    db_session: Session, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+def test_match_start_skipped_when_freeze_reconciled(    db_session: Session, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
 ) -> None:
     """Сыгранный матч: «старт» не пушим задним числом, итог — через match_result."""
     _point_repo_root(monkeypatch, tmp_path)

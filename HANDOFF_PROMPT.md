@@ -1036,3 +1036,22 @@ match_start с вероятностью; после карт — draft_ready; п
 драфты идут, итоги ждут ручного reconcile), приватность репо для raw-скачивания
 (если 404 — только git с доступом владельца), снятие battery-optimization с
 Termux (действие владельца, иначе Doze убьёт циклы ночью).
+
+### Сессия 2026-09-29 (вечер): хост — арендованная виртуалка Ubuntu (systemd)
+
+**Решение владельца:** вместо телефона — виртуалка 158.160.139.215 (Ubuntu 24.04,
+2 CPU / 4 ГБ / 32 ГБ). Настроена с ПК по SSH за один заход: PostgreSQL 17 (PGDG),
+репо `~/d2intel` (main), venv + runtime-зависимости (без catboost), роль/БД,
+restore полного дампа из `transfer/phone-2026-09-28` (10 фикстур, 16937 игр,
+notify_state=2 — сошлось с ПК), freeze-JSON, `.env` (TG + STRATZ, chmod 600),
+схема 0008 head. Три юнита systemd (server / live 5 мин / result 30 мин),
+enable --now, `/health` 200. Часы VM сверены с ПК (UTC сходится, NTP active).
+
+**Честный провал дня (фиксирую, не прячу):** 6 матчей BLAST 29.09 прошли БЕЗ
+заморозок — ПК был офлайн весь день, телефон не поднят. Задним числом freeze
+запрещён правилами → предиктов на них нет и не будет. `trigger_match_start`
+получил guard `too_late_for_start` (STALE_START_AFTER=3ч): «игра началась»
+опоздавшие часы не пушится; auto-freeze помечает такие `missed_start`.
+Драфты сегодняшних карт result-cycle доберёт в `draft_observed` (Gate-2, учебные
+данные) — это спасено. 30.09 (Yandex–MOUZ, BetBoom–OG) заморозятся штатно.
+Первый match_result-пуш (Wallachia) уйдёт с VM следующим тиком.

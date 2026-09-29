@@ -38,7 +38,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import text
@@ -61,6 +61,12 @@ MODEL_NOT_ACCEPTED_NOTE = (
 )
 
 ATTRIBUTION = "Расписание: Liquipedia (CC BY-SA 3.0)"
+
+#: «Игра началась» позже этого срока после scheduled_at не пушится:
+#: незамороженный матч, стартовавший часы назад, — операционный пропуск
+#: (auto-freeze пометит missed_start), а не живой старт. Bo3 группового этапа
+#: дольше не длятся; лимит задокументирован, а не подобран под данные.
+STALE_START_AFTER = timedelta(hours=3)
 
 
 def _format_dt(value: Any) -> str:
@@ -491,6 +497,12 @@ def trigger_match_start(
         start = start.replace(tzinfo=UTC)
     if now < start:
         return {"fixture_id": fixture_id, "status": "not_started_yet"}
+
+    # Незамороженный матч, стартовавший часы назад: слать «игра началась»
+    # задним числом — дезинформация; это пропуск auto-freeze, не живой старт.
+    # Замороженные (reconciled-guard выше пропущен) идут как обычно.
+    if fixture.get("freeze_id") is None and now - start > STALE_START_AFTER:
+        return {"fixture_id": fixture_id, "status": "too_late_for_start"}
 
     p_a, _freeze_id = _freezed_probability(db, fixture_id)
     message = build_match_start_message(
